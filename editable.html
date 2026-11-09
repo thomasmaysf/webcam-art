@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Mirror — edit the code, run it live</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#121821; --ink:#e8eef2; --muted:#7d8a99;
+    --line:#1f2a37; --hot:#ff5c5c; --cool:#3ddc97; --amber:#ffb347;
+    --code-bg:#0d1219; --purple:#c792ea; --blue:#82aaff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Space Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    min-height:100vh;padding:24px;
+    background-image:radial-gradient(circle at 15% 10%,rgba(61,220,151,.06),transparent 40%),
+                     radial-gradient(circle at 85% 90%,rgba(255,92,92,.06),transparent 40%);
+  }
+  header{max-width:1240px;margin:0 auto 18px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:26px;font-weight:700;letter-spacing:-.5px}
+  h1 .blink{color:var(--hot);animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .tag{color:var(--muted);font-size:13px}
+  .wrap{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:minmax(0,520px) minmax(0,1fr);gap:18px;align-items:start}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+  #holder{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  #holder canvas{display:block;max-width:100%;height:auto;border-radius:10px}
+  .hint{color:var(--muted);font-size:13px;text-align:center;padding:0 20px;line-height:1.6}
+  .startbtn{background:var(--cool);color:#04201a;border:none;padding:14px 26px;border-radius:8px;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;letter-spacing:.3px}
+  .startbtn:hover{filter:brightness(1.1)}
+
+  .ctitle{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+  .ctrl label b{color:var(--amber)}
+  .ctrl .varname{color:var(--cool)}
+  input[type=range]{width:100%;-webkit-appearance:none;height:5px;background:var(--line);border-radius:5px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
+
+  .editor{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .ebar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .ebar .left{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1.2px}
+  .ebtns{display:flex;gap:8px;flex-wrap:wrap}
+  button.b{font-family:inherit;font-size:12px;padding:8px 14px;border-radius:7px;cursor:pointer;border:1px solid var(--line);background:var(--code-bg);color:var(--ink);transition:.15s}
+  button.b:hover{border-color:var(--cool)}
+  button.run{background:var(--cool);color:#04201a;border-color:var(--cool);font-weight:700}
+  button.run:hover{filter:brightness(1.1)}
+  .codewrap{position:relative}
+  textarea#code{
+    width:100%;height:340px;background:var(--code-bg);color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;padding:14px 14px 14px 14px;font-family:inherit;font-size:13px;line-height:1.7;
+    resize:vertical;tab-size:2;white-space:pre;overflow:auto;outline:none;
+  }
+  textarea#code:focus{border-color:var(--cool)}
+  .status{font-size:12px;min-height:18px;padding:8px 12px;border-radius:7px;display:none}
+  .status.ok{display:block;background:rgba(61,220,151,.12);color:var(--cool);border:1px solid rgba(61,220,151,.3)}
+  .status.err{display:block;background:rgba(255,92,92,.12);color:var(--hot);border:1px solid rgba(255,92,92,.35)}
+  .vars{font-size:11px;color:var(--muted);line-height:1.8;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .vars code{color:var(--amber)}
+  .vars .fn{color:var(--blue)}
+  .auto{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>pixel mirror<span class="blink">_</span></h1>
+  <span class="tag">// edit the draw loop on the right → press run → the camera redraws</span>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: canvas + sliders -->
+  <div class="stage">
+    <div id="holder">
+      <div class="hint" id="hint">
+        This sketch rebuilds your webcam out of code you can edit.<br><br>
+        <button class="startbtn" id="start">▶ start camera</button><br><br>
+        Camera stays on your device — nothing is uploaded.
+      </div>
+    </div>
+    <div>
+      <div class="ctitle">▸ live variables (also editable in code)</div>
+      <div class="controls">
+        <div class="ctrl">
+          <label><span class="varname">gridSize</span><b id="vGrid">14</b></label>
+          <input type="range" id="grid" min="4" max="48" value="14">
+        </div>
+        <div class="ctrl">
+          <label><span class="varname">threshold</span><b id="vThresh">128</b></label>
+          <input type="range" id="thresh" min="0" max="255" value="128">
+        </div>
+        <div class="ctrl">
+          <label><span class="varname">hueShift</span><b id="vHue">0</b></label>
+          <input type="range" id="hue" min="0" max="360" value="0">
+        </div>
+        <div class="ctrl">
+          <label><span class="varname">wobble</span><b id="vWob">0</b></label>
+          <input type="range" id="wob" min="0" max="40" value="0">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: editable code -->
+  <div class="editor">
+    <div class="ebar">
+      <span class="left">// drawCell(x, y, bright, hue) — runs for every cell, every frame</span>
+      <div class="ebtns">
+        <label class="auto"><input type="checkbox" id="autorun" checked> auto-run</label>
+        <button class="b" id="reset">↺ reset</button>
+        <button class="b run" id="run">▶ run (⌘/Ctrl+↵)</button>
+      </div>
+    </div>
+
+    <div class="codewrap">
+      <textarea id="code" spellcheck="false"></textarea>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="vars">
+      <b style="color:var(--ink)">available to you:</b><br>
+      <code>x</code>, <code>y</code> — cell position &nbsp;·&nbsp; <code>bright</code> 0–255 &nbsp;·&nbsp; <code>hue</code> 0–360 &nbsp;·&nbsp; <code>px</code>, <code>py</code> — pixel center<br>
+      <code>gridSize</code> <code>threshold</code> <code>hueShift</code> <code>wobble</code> <code>frameCount</code> &nbsp; (sliders update these)<br>
+      <span class="fn">fill</span>(h,s,b) · <span class="fn">ellipse</span>(x,y,w,h) · <span class="fn">rect</span>(x,y,w,h) · <span class="fn">sin</span>/<span class="fn">cos</span> · <span class="fn">map</span>(v,a,b,c,d) · <span class="fn">random</span>(n) · <span class="fn">width</span>/<span class="fn">height</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- variables controlled by sliders ----
+let gridSize = 14, threshold = 128, hueShift = 0, wobble = 0;
+let video, started = false;
+
+// ---- the user-editable function, compiled from the textarea ----
+let userDraw = null;
+
+const DEFAULT_CODE =
+`// This block runs once per cell, ~30x a second.
+// Try changing numbers, or swap ellipse() for rect().
+
+if (bright > threshold) {
+  fill(hue, 70, 100);
+
+  // dot size grows with brightness
+  let d = map(bright, threshold, 255, 1, gridSize);
+  ellipse(px, py, d, d);
+}
+
+// --- ideas to try (delete the // to enable) ---
+// rect(px, py, gridSize, gridSize);          // blocks instead of dots
+// fill((bright * 2 + hueShift) % 360, 90, 100);
+// let jump = random(wobble);  ellipse(px + jump, py, 6, 6);
+`;
+
+function setup(){
+  const c = createCanvas(640, 480);
+  c.parent("holder");
+  c.canvas.style.display = "none";
+  pixelDensity(1);
+  colorMode(HSB, 360, 100, 100, 255);
+  noStroke();
+  frameRate(30);
+  $("code").value = DEFAULT_CODE;
+  compile();          // build userDraw from default code
+}
+
+function startCam(){
+  video = createCapture(VIDEO, () => {
+    $("hint").style.display = "none";
+    document.querySelector("#holder canvas").style.display = "block";
+    started = true;
+  });
+  video.size(160, 120);
+  video.hide();
+}
+
+function draw(){
+  if(!started || !video || video.width === 0) return;
+  background(0,0,0);
+  video.loadPixels();
+  if(video.pixels.length === 0 || !userDraw) return;
+
+  const cols = floor(width / gridSize);
+  const rows = floor(height / gridSize);
+
+  for(let y = 0; y < rows; y++){
+    for(let x = 0; x < cols; x++){
+      // mirror horizontally so it feels like a mirror
+      let sx = cols - 1 - x;
+      let vx = floor(sx / cols * video.width);
+      let vy = floor(y / rows * video.height);
+      let i = (vy * video.width + vx) * 4;
+
+      let r = video.pixels[i], g = video.pixels[i+1], b = video.pixels[i+2];
+      let bright = (r + g + b) / 3;
+      let hue = (map(bright,0,255,200,360) + hueShift) % 360;
+      let px = x * gridSize + gridSize/2;
+      let py = y * gridSize + gridSize/2;
+
+      // run the audience's code for this cell
+      try {
+        userDraw(x, y, bright, hue, px, py, r, g, b);
+      } catch(e){
+        // a runtime error: stop the loop cleanly, report once
+        noLoop();
+        showStatus("⚠ runtime error: " + e.message + "  (fix the code and press run)", false);
+        return;
+      }
+    }
+  }
+}
+
+// ===== compile the textarea into a function =====
+function compile(){
+  const src = $("code").value;
+  try {
+    // expose p5 globals + our variables as named arguments
+    const fn = new Function(
+      "x","y","bright","hue","px","py","r","g","b",
+      "gridSize","threshold","hueShift","wobble","frameCount","width","height",
+      "fill","stroke","noStroke","ellipse","rect","line","triangle","arc","point",
+      "sin","cos","map","random","abs","floor","dist","TWO_PI","PI",
+      src
+    );
+    // wrapper binds current globals each call
+    userDraw = (x,y,bright,hue,px,py,r,g,b) => fn(
+      x,y,bright,hue,px,py,r,g,b,
+      gridSize,threshold,hueShift,wobble,frameCount,width,height,
+      fill,stroke,noStroke,ellipse,rect,line,triangle,arc,point,
+      sin,cos,map,random,abs,floor,dist,TWO_PI,PI
+    );
+    if(typeof loop === "function") loop();   // resume if a runtime error had paused it
+    showStatus("✓ running — your code is live on the camera", true);
+  } catch(e){
+    showStatus("✗ syntax error: " + e.message, false);
+  }
+}
+
+// ===== UI =====
+function $(id){return document.getElementById(id)}
+$("start").onclick = startCam;
+$("run").onclick = compile;
+$("reset").onclick = () => { $("code").value = DEFAULT_CODE; compile(); };
+
+$("code").addEventListener("keydown", e => {
+  // Tab inserts two spaces instead of leaving the box
+  if(e.key === "Tab"){
+    e.preventDefault();
+    const t = e.target, s = t.selectionStart;
+    t.value = t.value.slice(0,s) + "  " + t.value.slice(t.selectionEnd);
+    t.selectionStart = t.selectionEnd = s + 2;
+  }
+  // Cmd/Ctrl+Enter = run
+  if((e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); compile(); }
+});
+
+// auto-run a short moment after typing stops
+let typer;
+$("code").addEventListener("input", () => {
+  if(!$("autorun").checked) return;
+  clearTimeout(typer);
+  typer = setTimeout(compile, 600);
+});
+
+function showStatus(msg, ok){
+  const s = $("status");
+  s.textContent = msg;
+  s.className = "status " + (ok ? "ok" : "err");
+}
+
+function bindSlider(id, vId, set){
+  const s = $(id);
+  s.oninput = () => { set(+s.value); $(vId).textContent = s.value; };
+}
+bindSlider("grid","vGrid",v=>gridSize=v);
+bindSlider("thresh","vThresh",v=>threshold=v);
+bindSlider("hue","vHue",v=>hueShift=v);
+bindSlider("wob","vWob",v=>wobble=v);
+</script>
+</body>
+</html>
