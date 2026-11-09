@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pixel Mirror — code your camera</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
+<title>Pixel Mirror — controls</title>
 <style>
   :root{
     --bg:#0a0e14; --panel:#121821; --ink:#e8eef2; --muted:#7d8a99;
@@ -86,7 +84,7 @@
 <body>
 <header>
   <h1>pixel mirror<span class="blink">_</span></h1>
-  <span class="tag">// drag a slider — or use the keyboard — and watch the code &amp; camera change</span>
+  <span class="tag">// this screen is the desk — the picture is on the projector</span>
 </header>
 
 <div class="wrap">
@@ -94,9 +92,11 @@
     <div id="holder">
       <div id="flash"></div>
       <div class="hint" id="hint">
-        This sketch reads your webcam and rebuilds it out of code.<br><br>
-        <button class="startbtn" id="start">▶ start camera</button><br><br>
-        Camera stays on your device — nothing is uploaded or recorded.
+        The picture is fullscreen on the projector window.<br>
+        Drag it onto the second screen, then click it once.<br><br>
+        <button class="startbtn" id="start">open projector</button><br><br>
+        That click starts the camera, the microphone, and fullscreen.<br>
+        The center button on the M5Stack changes the program.
       </div>
     </div>
     <div class="modes" id="modes">
@@ -111,27 +111,27 @@
     <div class="ctitle">▸ variables you control</div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="grid" title="let mic drive this" disabled>🎤</button><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
+      <label><span class="lhs"><button class="mic on" data-mic="grid" title="let mic drive this">🎤</button><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
       <input type="range" id="grid" min="4" max="48" value="14">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="thresh" title="let mic drive this" disabled>🎤</button><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
+      <label><span class="lhs"><button class="mic" data-mic="thresh" title="let mic drive this">🎤</button><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
       <input type="range" id="thresh" min="0" max="255" value="128">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="hue" title="let mic drive this" disabled>🎤</button><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
+      <label><span class="lhs"><button class="mic" data-mic="hue" title="let mic drive this">🎤</button><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
       <input type="range" id="hue" min="0" max="360" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="wob" title="let mic drive this" disabled>🎤</button><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
+      <label><span class="lhs"><button class="mic on" data-mic="wob" title="let mic drive this">🎤</button><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
       <input type="range" id="wob" min="0" max="40" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="ang" title="let mic drive this" disabled>🎤</button><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
+      <label><span class="lhs"><button class="mic" data-mic="ang" title="let mic drive this">🎤</button><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
       <input type="range" id="ang" min="0" max="360" value="0">
     </div>
 
@@ -146,9 +146,15 @@
     </div>
 
     <div class="micbar">
+      <div class="mlabel"><span>▣ M5Stack <span id="m5State">(looking…)</span></span></div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.55">A previous program · B next program · C chunkier<br>hold B reset · hold C finer<br>tilt, pitch, and gyro are drawn on the projector</div>
+      <button class="micbtn" id="m5Connect" style="display:none">connect M5Stack</button>
+    </div>
+
+    <div class="micbar">
       <div class="mlabel"><span>🎤 mic volume <span id="micState" style="color:var(--muted)">(off)</span></span><b id="micVal">0</b></div>
       <div class="meter"><span id="meter"></span></div>
-      <button class="micbtn" id="micEnable">enable microphone</button>
+      <button class="micbtn" id="micEnable">microphone follows the projector</button>
     </div>
   </div>
 
@@ -165,6 +171,7 @@
       <div class="krow"><kbd>I</kbd><b>invert</b></div>
       <div class="krow"><kbd>R</kbd><b>reset all</b></div>
       <div class="krow"><kbd>space</kbd><b>start camera</b></div>
+      <div class="krow"><kbd>M5 B</kbd><b>next program</b></div>
     </div>
   </div>
 
@@ -184,96 +191,28 @@ const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
 
 // ---- microphone ----
 let mic, micOn = false, micLevel = 0;        // micLevel: smoothed 0..1
-const micArmed = { grid:false, thresh:false, hue:false, wob:false, ang:false };
+const micArmed = { grid:true, thresh:false, hue:false, wob:true, ang:false };
+const bus = new BroadcastChannel("pixel-mirror");
+let liveAdd = {grid:0, thresh:0, hue:0, wob:0, ang:0};
 
-function setup(){
-  const c = createCanvas(640, 480);
-  c.parent("holder");
-  c.canvas.style.display = "none";   // hidden until camera starts
-  pixelDensity(1);
-  colorMode(HSB, 360, 100, 100, 255);
-  noStroke();
-  frameRate(30);
+function snapshot(){
+  return {type:"state", grid:base.grid, thresh:base.thresh, hue:base.hue, wob:base.wob, ang:base.ang,
+    mir: mirror ? 1 : 0, inv: invert ? 1 : 0, mode, micArm: Object.assign({}, micArmed)};
+}
+function publish(){ if(!m5Applying) bus.postMessage(snapshot()); }
+
+function openStage(){
+  const w = window.open("/stage", "pixel-mirror-stage");
+  if(w) w.focus();
+  publish();
+  flash("drag the projector window to the second screen, then click it");
 }
 
-function startCam(){
-  video = createCapture(VIDEO, () => {
-    document.getElementById("hint").style.display = "none";
-    document.querySelector("#holder canvas").style.display = "block";
-    started = true;
-  });
-  video.size(160, 120);   // low-res source = fast + chunky on purpose
-  video.hide();
-}
-
-function draw(){
-  // --- read mic + push level into any armed variable (additive on top of slider) ---
-  if(micOn && mic){
-    let raw = mic.getLevel();                 // 0..~0.4 typical
-    micLevel = lerp(micLevel, raw, 0.35);     // smooth it so it isn't jittery
-    let v = constrain(micLevel * 4, 0, 1);    // normalize to 0..1
-    updateMeter(v);
-    applyMic(v);
-  }
-
-  if(!started || !video || video.width === 0) return;
-  background(invert ? 100 : 0, 0, invert ? 100 : 0);
-  video.loadPixels();
-  if(video.pixels.length === 0) return;
-
-  const cols = floor(width / gridSize);
-  const rows = floor(height / gridSize);
-
-  for(let y = 0; y < rows; y++){
-    for(let x = 0; x < cols; x++){
-      // map screen cell -> webcam pixel (mirror flips x)
-      let sx = mirror ? (cols - 1 - x) : x;
-      let vx = floor(sx / cols * video.width);
-      let vy = floor(y / rows * video.height);
-      let i = (vy * video.width + vx) * 4;
-
-      let r = video.pixels[i], g = video.pixels[i+1], b = video.pixels[i+2];
-      let bright = (r + g + b) / 3;
-      if(invert) bright = 255 - bright;
-
-      // wobble: nudge each cell along wobAngle by a moving sine wave
-      let wob = wobble * sin((x + y) * 0.4 + frameCount * 0.08);
-      let a = radians(wobAngle);
-      let px = x * gridSize + gridSize/2 + wob * cos(a);
-      let py = y * gridSize + gridSize/2 + wob * sin(a);
-
-      let hue = (map(bright,0,255,200,360) + hueShift) % 360;
-
-      if(mode === 0){                       // ascii dots
-        if(bright > threshold){
-          fill(hue, 70, 100);
-          let d = map(bright, threshold, 255, 1, gridSize);
-          ellipse(px, py, d, d);
-        }
-      } else if(mode === 1){                // color blocks
-        let cr = (r + hueShift) % 256;
-        colorMode(RGB,255); fill(cr, g, b); colorMode(HSB,360,100,100,255);
-        rect(x*gridSize, y*gridSize, gridSize-1, gridSize-1);
-      } else if(mode === 2){                // edge glow
-        let i2 = (vy * video.width + min(vx+1, video.width-1)) * 4;
-        let nb = (video.pixels[i2]+video.pixels[i2+1]+video.pixels[i2+2])/3;
-        let edge = abs(bright - nb);
-        if(edge > threshold/4){
-          fill((edge*2 + hueShift)%360, 90, 100);
-          ellipse(px, py, gridSize*0.9, gridSize*0.9);
-        }
-      } else {                              // mirror kaleido
-        fill(hue, 80, bright > threshold ? 100 : 40);
-        rect(x*gridSize, y*gridSize, gridSize/2, gridSize/2);
-        rect(width - x*gridSize - gridSize, y*gridSize, gridSize/2, gridSize/2);
-      }
-    }
-  }
-}
+function draw(){ /* picture lives in the projector window */ }
 
 // ===== UI wiring =====
 function $(id){return document.getElementById(id)}
-$("start").onclick = startCam;
+$("start").onclick = openStage;
 
 // ranges each variable is allowed to move within
 const RANGE = { grid:[4,48], thresh:[0,255], hue:[0,360], wob:[0,40], ang:[0,360] };
@@ -288,6 +227,8 @@ function setVar(id, val){
   applyVar(id, val);
   $(id).value = val;
   renderCode(id);
+  pushM5("pm set " + id + " " + val);
+  publish();
 }
 
 // write a value into the live variable + its readout label (no base change)
@@ -303,12 +244,34 @@ function applyVar(id, val){
 }
 function nudge(id, delta){ setVar(id, base[id] + delta); }
 
+// M5Stack link. serve.py is the bridge; Web Serial is the fallback.
+let m5Applying = false;
+let m5Bridge = false;
+let m5Writer = null;
+const m5Enc = new TextEncoder();
+
+function pushM5(line){
+  if(m5Applying) return;
+  if(m5Bridge){
+    fetch("/m5", {method:"POST", body: line + "\n"}).catch(()=>{});
+  } else if(m5Writer){
+    m5Writer.write(m5Enc.encode(line + "\n")).catch(()=>{});
+  }
+}
+function setM5Status(text, on){
+  const el = $("m5State");
+  el.textContent = text;
+  el.style.color = on ? "var(--cool)" : "var(--muted)";
+}
+
 function setToggle(id, val){
   const el = $(id);
   el.classList.toggle("on", val);
   if(id==="mir") mirror = val;
   if(id==="inv") invert = val;
   renderCode(id);
+  pushM5("pm set " + (id === "mir" ? "mir" : "inv") + " " + (val ? 1 : 0));
+  publish();
 }
 
 function setMode(m){
@@ -316,6 +279,8 @@ function setMode(m){
   document.querySelectorAll(".mode").forEach(b=>b.classList.toggle("on", +b.dataset.mode===m));
   $("modeName").textContent = modeNames[m];
   renderCode();
+  pushM5("pm set mode " + m);
+  publish();
 }
 
 // sliders feed the same setters
@@ -326,36 +291,19 @@ document.querySelectorAll(".mode").forEach(btn=>{ btn.onclick = () => setMode(+b
 
 // ===== microphone =====
 function enableMic(){
-  if(micOn) return;
-  // browsers require a user gesture to start audio
-  if(typeof getAudioContext === "function") getAudioContext().resume();
-  mic = new p5.AudioIn();
-  mic.start(
-    () => {                              // success
-      micOn = true;
-      $("micEnable").textContent = "microphone live ✓";
-      $("micEnable").classList.add("on");
-      $("micState").textContent = "(live)";
-      $("micState").style.color = "var(--hot)";
-      document.querySelectorAll(".mic").forEach(b => b.disabled = false);
-      flash("microphone on — arm a 🎤 next to a variable");
-    },
-    () => {                             // denied / failed
-      $("micEnable").textContent = "mic blocked — check permissions";
-      flash("microphone permission denied");
-    }
-  );
+  bus.postMessage({type:"wantMic"});
+  flash("mic listens from the projector window");
 }
 $("micEnable").onclick = enableMic;
 
 // arm/disarm a variable so mic volume drives it
 document.querySelectorAll(".mic").forEach(btn=>{
   btn.onclick = () => {
-    if(!micOn){ flash("enable the microphone first"); return; }
     const id = btn.dataset.mic;
     micArmed[id] = !micArmed[id];
     btn.classList.toggle("on", micArmed[id]);
     if(!micArmed[id]) applyVar(id, base[id]);   // release back to slider value
+    publish();
     flash((micArmed[id] ? "mic → " : "mic off ") + id);
   };
 });
@@ -408,7 +356,7 @@ window.addEventListener("keydown", e => {
       document.querySelectorAll(".mic").forEach(b=>b.classList.remove("on"));
       flash("reset"); break;
     case " ":
-      if(!started){ startCam(); flash("starting camera…"); } else handled=false; break;
+      openStage(); break;
     default: handled = false;
   }
   if(handled) e.preventDefault();   // stop arrows/space from scrolling the page
@@ -442,6 +390,110 @@ function renderCode(changedId){
   }
 }
 renderCode();
+
+function applyM5(line){
+  const p = line.trim().split(/\s+/);
+  if(p[0] !== "pm") return;
+  if(p[1] === "hello"){
+    setM5Status("(linked)", true);
+    return;
+  }
+  if(p[1] === "imu") return;
+  if(p[1] === "drew") return;
+  if(p[1] === "cam"){
+    bus.postMessage({type:"cam"});
+    return;
+  }
+  if(p[1] !== "set" || p.length < 4) return;
+  const key = p[2];
+  const val = Number(p[3]);
+  if(Number.isNaN(val)) return;
+  m5Applying = true;
+  try{
+    if(key === "mode") setMode(val);
+    else if(key === "mir") setToggle("mir", val !== 0);
+    else if(key === "inv") setToggle("inv", val !== 0);
+    else if(RANGE[key]) setVar(key, val);
+  } finally {
+    m5Applying = false;
+  }
+}
+
+async function readWebSerial(port){
+  const reader = port.readable.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  try{
+    while(true){
+      const {value, done} = await reader.read();
+      if(done) break;
+      buf += dec.decode(value, {stream:true});
+      let i;
+      while((i = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        applyM5(line);
+      }
+    }
+  } catch(e){
+    setM5Status("(serial closed)", false);
+  }
+}
+
+$("m5Connect").onclick = async () => {
+  if(!("serial" in navigator)){
+    flash("no Web Serial here — run python serve.py");
+    return;
+  }
+  try{
+    const port = await navigator.serial.requestPort({filters:[{usbVendorId:0x0403}]});
+    await port.open({baudRate:115200});
+    m5Writer = port.writable.getWriter();
+    setM5Status("(serial open)", true);
+    readWebSerial(port);
+    m5Writer.write(m5Enc.encode("pm dump\n"));
+  } catch(e){
+    flash("M5Stack port not opened");
+  }
+};
+
+async function connectBridge(){
+  try{
+    const r = await fetch("/m5/status", {cache:"no-store"});
+    if(!r.ok) throw new Error("no bridge");
+    const j = await r.json();
+    m5Bridge = true;
+    $("m5Connect").style.display = "none";
+    const short = j.port ? j.port.split("/").pop() : "";
+    setM5Status(j.connected ? "(linked · " + short + ")" : "(waiting for M5Stack)", !!j.connected);
+    const es = new EventSource("/m5/events");
+    es.onmessage = (e) => applyM5(e.data);
+    es.onerror = () => setM5Status("(bridge dropped)", false);
+  } catch(e){
+    m5Bridge = false;
+    setM5Status("(not linked)", false);
+    $("m5Connect").style.display = "block";
+  }
+}
+connectBridge();
+
+bus.onmessage = (e) => {
+  const m = e.data || {};
+  if(m.type === "stage") publish();
+  if(m.type === "live" && m.add){
+    liveAdd = m.add;
+    applyVar("grid", base.grid + m.add.grid);
+    applyVar("thresh", base.thresh + m.add.thresh);
+    applyVar("hue", base.hue + m.add.hue);
+    applyVar("wob", base.wob + m.add.wob);
+    applyVar("ang", base.ang + m.add.ang);
+    updateMeter(m.mic || 0);
+    $("micState").textContent = "(live on projector)";
+    $("micState").style.color = "var(--hot)";
+    renderCode();
+  }
+};
+publish();
 </script>
 </body>
 </html>
