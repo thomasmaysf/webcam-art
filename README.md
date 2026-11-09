@@ -50,11 +50,45 @@ Click **enable microphone**, then arm the 🎤 button next to any variable(s). T
 
 ## Running it
 
-Camera and microphone require a **secure context**:
+Camera and microphone require a **secure context** (`localhost` or a file opened directly). Plain `http://` on another machine will block both.
 
-- **Opening the file directly** (double-click) works in most browsers.
-- **`localhost`** works.
-- Plain `http://` over a network will block camera/mic — use HTTPS.
+On this computer, with the M5Stack plugged in:
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python pyserial
+.venv/bin/python serve.py
+```
+
+Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/) for the controls and [http://127.0.0.1:8765/stage](http://127.0.0.1:8765/stage) for the fullscreen projector. `serve.py` bridges the M5Stack on USB. The board that enumerates as **M5stack** (FT232, vendor string Hades2001) is the one it picks.
+
+### Two screens
+
+The control deck stays on this display. **Open projector**, drag that window onto the second screen, and click it once. That click starts the camera, the microphone, and fullscreen. Mic level, tilt, pitch, and gyro are drawn on the picture, with the variable they are adding to.
+
+### M5Stack buttons
+
+The LCD is a 16×12 copy of the projector image. The three buttons sit under that screen.
+
+| Control | Action |
+|---------|--------|
+| A | Previous program |
+| B (center) | Next program |
+| C | Chunkier grid |
+| Hold C | Finer grid |
+| Hold B | Reset |
+| Tilt / gyro | Drawn on the projector and added to hue, threshold, and warp |
+
+Sliders and keys push the same values back to the screen, so the stack and the page stay on the same numbers.
+
+Reflash the controller firmware (replaces whatever sketch is on the board):
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:m5stack-core-esp32 firmware/pixel_mirror
+arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:m5stack-core-esp32:UploadSpeed=115200 firmware/pixel_mirror
+```
+
+Needs the ESP32 core 2.0.17 and the M5Stack library. `serve.py` has to be stopped first — it holds the serial port.
 
 ### Enabling GitHub Pages (for the hosted link)
 

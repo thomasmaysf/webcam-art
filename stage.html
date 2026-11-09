@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Mirror — projector</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:ui-monospace,monospace}
+  #go{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
+    background:#0a0e14;color:#e8eef2;z-index:5;text-align:center;padding:24px;
+  }
+  #go p{color:#7d8a99;max-width:460px;line-height:1.6}
+  #go button{
+    background:#3ddc97;color:#04201a;border:none;padding:16px 28px;border-radius:8px;
+    font:700 16px inherit;cursor:pointer;
+  }
+  canvas{display:block}
+</style>
+</head>
+<body>
+<div id="go">
+  <button id="start" type="button">start camera</button>
+  <p>Click once on this window. It goes fullscreen, opens the LifeCam and the mic, and follows the control deck plus the M5Stack.</p>
+</div>
+<script>
+const bus = new BroadcastChannel("pixel-mirror");
+const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
+const S = {grid:14, thresh:128, hue:0, wob:0, ang:0, mir:true, inv:false, mode:0};
+const micArm = {grid:true, thresh:false, hue:false, wob:true, ang:false};
+
+let video, started = false;
+let micLevel = 0, micOn = false, analyser, micBuf, wave = new Uint8Array(0);
+let roll = 0, pitch = 0, spin = 0;
+let lastFrame = 0, lastLive = 0, frameBusy = false;
+
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+function inputs(){
+  const r = roll, p = pitch;
+  const mic = micOn ? micLevel : 0;
+  const grid = clamp(Math.round(S.grid + (micArm.grid ? mic * 16 : 0)), 4, 48);
+  const thresh = clamp(Math.round(S.thresh + p * 2.2 + (micArm.thresh ? mic * 90 : 0)), 0, 255);
+  const hue = (S.hue + r * 4 + (micArm.hue ? mic * 160 : 0) + 3600) % 360;
+  const wob = clamp(S.wob + mic * (micArm.wob ? 34 : 16), 0, 40);
+  const ang = (S.ang + spin * 150 + (micArm.ang ? mic * 120 : 0) + 3600) % 360;
+  return {roll:r, pitch:p, spin, mic, grid, thresh, hue, wob, ang,
+    add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hue-S.hue, wob:wob-S.wob, ang:ang-S.ang}};
+}
+
+function setup(){
+  const c = createCanvas(windowWidth, windowHeight);
+  pixelDensity(1);
+  colorMode(HSB, 360, 100, 100, 255);
+  noStroke();
+  frameRate(30);
+  c.canvas.style.display = "none";
+}
+function windowResized(){
+  pixelDensity(1);
+  resizeCanvas(windowWidth, windowHeight);
+}
+
+async function startMic(){
+  if(micOn) return;
+  const ctx = new AudioContext();
+  await ctx.resume();
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}
+  });
+  const src = ctx.createMediaStreamSource(stream);
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  src.connect(analyser);
+  micBuf = new Uint8Array(analyser.fftSize);
+  wave = new Uint8Array(180);
+  micOn = true;
+}
+function readMic(){
+  if(!analyser) return;
+  analyser.getByteTimeDomainData(micBuf);
+  let sum = 0;
+  for(let i = 0; i < micBuf.length; i++){
+    const v = (micBuf[i] - 128) / 128;
+    sum += v * v;
+  }
+  const rms = Math.sqrt(sum / micBuf.length);
+  const n = clamp((rms - 0.012) * 14, 0, 1);
+  micLevel += (n - micLevel) * 0.45;
+  if(wave.length){
+    wave.copyWithin(0, 1);
+    wave[wave.length - 1] = Math.round(micLevel * 255);
+  }
+}
+
+function startCam(){
+  document.getElementById("go").style.display = "none";
+  document.querySelector("canvas").style.display = "block";
+  const root = document.documentElement;
+  if(root.requestFullscreen) root.requestFullscreen().catch(()=>{});
+  video = createCapture(VIDEO, () => { started = true; });
+  video.size(160, 120);
+  video.hide();
+  startMic().catch(() => { micOn = false; });
+}
+
+function draw(){
+  readMic();
+  const L = inputs();
+  if(millis() - lastLive > 120){
+    lastLive = millis();
+    bus.postMessage({type:"live", mic:L.mic, roll:L.roll, pitch:L.pitch, spin:L.spin, add:L.add, mode:S.mode});
+  }
+  if(!started || !video || video.width === 0){
+    background(0);
+    return;
+  }
+  background(S.inv ? 100 : 0, 0, S.inv ? 100 : 0);
+  video.loadPixels();
+  if(video.pixels.length === 0) return;
+
+  const g = L.grid;
+  const cols = Math.max(1, Math.floor(width / g));
+  const rows = Math.max(1, Math.floor(height / g));
+  const punch = 0.7 + L.mic * 0.85;
+
+  for(let y = 0; y < rows; y++){
+    for(let x = 0; x < cols; x++){
+      let sx = S.mir ? (cols - 1 - x) : x;
+      let vx = Math.floor(sx / cols * video.width);
+      let vy = Math.floor(y / rows * video.height);
+      let i = (vy * video.width + vx) * 4;
+      let r = video.pixels[i], gc = video.pixels[i+1], b = video.pixels[i+2];
+      let bright = (r + gc + b) / 3;
+      if(S.inv) bright = 255 - bright;
+      let wob = L.wob * Math.sin((x + y) * 0.4 + frameCount * 0.08);
+      let a = L.ang * Math.PI / 180;
+      let px = x * g + g/2 + wob * Math.cos(a);
+      let py = y * g + g/2 + wob * Math.sin(a);
+      let hue = (bright / 255 * 160 + 200 + L.hue) % 360;
+
+      if(S.mode === 0){
+        if(bright > L.thresh){
+          fill(hue, 70, 100);
+          const d = (1 + (bright - L.thresh) / (255 - L.thresh + 1) * (g - 1)) * punch;
+          ellipse(px, py, d, d);
+        }
+      } else if(S.mode === 1){
+        const cr = (r + L.hue) % 256;
+        colorMode(RGB, 255);
+        fill(cr, gc, b);
+        colorMode(HSB, 360, 100, 100, 255);
+        const s = Math.max(2, (g - 1) * punch);
+        rect(px - s/2, py - s/2, s, s);
+      } else if(S.mode === 2){
+        let i2 = (vy * video.width + Math.min(vx+1, video.width-1)) * 4;
+        let nb = (video.pixels[i2] + video.pixels[i2+1] + video.pixels[i2+2]) / 3;
+        let edge = Math.abs(bright - nb);
+        if(edge > L.thresh / 4){
+          fill((edge * 2 + L.hue) % 360, 90, 100);
+          ellipse(px, py, g * 0.9 * punch, g * 0.9 * punch);
+        }
+      } else {
+        fill(hue, 80, bright > L.thresh ? 100 : 40);
+        rect(px - g * punch / 4, py - g * punch / 4, g * punch / 2, g * punch / 2);
+        rect(width - px - g * punch / 4, py - g * punch / 4, g * punch / 2, g * punch / 2);
+      }
+    }
+  }
+  sendMatrix();
+  drawHUD(L);
+}
+
+function packDot(r, g, b){
+  const peak = Math.max(r, g, b);
+  if(peak < 28) return 0;
+  // Keep the hue and stop every channel sitting at full scale (that painted the panel white).
+  const scale = 150 / peak;
+  r = Math.min(255, r * scale);
+  g = Math.min(255, g * scale);
+  b = Math.min(255, b * scale);
+  return ((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6);
+}
+
+function sendMatrix(){
+  if(millis() - lastFrame < 140 || frameBusy || !started) return;
+  lastFrame = millis();
+  const data = drawingContext.getImageData(0, 0, width, height).data;
+  const buf = new Uint8Array(16 * 12);
+  const stride = width * 4;
+  for(let y = 0; y < 12; y++){
+    const py = Math.min(height - 1, Math.floor((y + 0.5) * height / 12));
+    for(let x = 0; x < 16; x++){
+      const px = Math.min(width - 1, Math.floor((x + 0.5) * width / 16));
+      const i = py * stride + px * 4;
+      buf[y * 16 + x] = packDot(data[i], data[i + 1], data[i + 2]);
+    }
+  }
+  frameBusy = true;
+  fetch("/m5/frame", {method:"POST", body:buf}).catch(()=>{}).finally(() => { frameBusy = false; });
+}
+
+function drawHUD(L){
+  const y0 = height - 108;
+  fill(0, 0, 0, 190);
+  rect(0, y0, width, 108);
+  fill(0, 0, 100);
+  textSize(15);
+  textFont("monospace");
+  const rows = [
+    ["mic", L.mic, "wobble", Math.round(S.wob), Math.round(L.add.wob)],
+    ["tilt", (L.roll / 40 + 1) / 2, "hueShift", Math.round(S.hue), Math.round(L.add.hue)],
+    ["pitch", (L.pitch / 40 + 1) / 2, "threshold", Math.round(S.thresh), Math.round(L.add.thresh)],
+    ["gyro", L.spin, "wobAngle", Math.round(S.ang), Math.round(L.add.ang)]
+  ];
+  rows.forEach((row, i) => {
+    const y = y0 + 14 + i * 24;
+    fill(0, 0, 70);
+    text(row[0], 16, y + 12);
+    fill(0, 0, 20);
+    rect(90, y, 140, 12, 3);
+    if(row[0] === "mic") fill(0, 80, 100); else fill(150, 40, 100);
+    rect(90, y, 140 * clamp(row[1], 0, 1), 12, 3);
+    fill(0, 0, 100);
+    const sign = row[4] >= 0 ? "+" : "";
+    text(row[2] + "  " + row[3] + " " + sign + row[4] + "   = " + (row[3] + row[4]), 248, y + 12);
+  });
+
+  // mic trace
+  fill(0, 0, 0, 160);
+  rect(width - 200, 16, 184, 56, 6);
+  stroke(0, 80, 100);
+  noFill();
+  beginShape();
+  for(let i = 0; i < wave.length; i++){
+    vertex(width - 192 + i, 64 - (wave[i] / 255) * 40);
+  }
+  endShape();
+  noStroke();
+  fill(0, 0, 100);
+  textSize(12);
+  text("mic → wobble", width - 192, 30);
+
+  // spirit level for tilt
+  const cx = 70, cy = 48;
+  fill(0, 0, 0, 160);
+  rect(16, 16, 108, 72, 6);
+  noFill();
+  stroke(0, 0, 40);
+  ellipse(cx, cy, 52, 52);
+  noStroke();
+  fill(150, 50, 100);
+  const bx = cx + clamp(L.roll, -28, 28);
+  const by = cy + clamp(L.pitch, -28, 28);
+  ellipse(bx, by, 14, 14);
+  fill(0, 0, 100);
+  textSize(11);
+  text("tilt", 22, 28);
+}
+
+function applyState(m){
+  if(m.grid != null) S.grid = m.grid;
+  if(m.thresh != null) S.thresh = m.thresh;
+  if(m.hue != null) S.hue = m.hue;
+  if(m.wob != null) S.wob = m.wob;
+  if(m.ang != null) S.ang = m.ang;
+  if(m.mir != null) S.mir = !!m.mir;
+  if(m.inv != null) S.inv = !!m.inv;
+  if(m.mode != null) S.mode = m.mode;
+  if(m.micArm) Object.assign(micArm, m.micArm);
+}
+bus.onmessage = (e) => {
+  const m = e.data || {};
+  if(m.type === "state") applyState(m);
+  if(m.type === "cam" && !started) startCam();
+  if(m.type === "wantMic") startMic().catch(()=>{});
+};
+bus.postMessage({type:"stage"});
+
+function applyM5(line){
+  const p = line.trim().split(/\s+/);
+  if(p[0] !== "pm") return;
+  if((p[1] === "tilt" || p[1] === "imu") && p.length >= 7){
+    if(p[1] !== "tilt") return;
+    roll = +p[2];
+    pitch = +p[3];
+    spin = Math.min(1, Math.hypot(+p[4], +p[5], +p[6]) / 140);
+    return;
+  }
+  if(p[1] === "cam"){ if(!started) startCam(); return; }
+  if(p[1] !== "set" || p.length < 4) return;
+  const key = p[2], val = Number(p[3]);
+  if(Number.isNaN(val)) return;
+  if(key === "mode") S.mode = val;
+  else if(key === "mir") S.mir = val !== 0;
+  else if(key === "inv") S.inv = val !== 0;
+  else if(key in S) S[key] = val;
+}
+function connectM5(){
+  const es = new EventSource("/m5/events");
+  es.onmessage = (e) => applyM5(e.data);
+}
+connectM5();
+document.getElementById("start").onclick = startCam;
+</script>
+</body>
+</html>
