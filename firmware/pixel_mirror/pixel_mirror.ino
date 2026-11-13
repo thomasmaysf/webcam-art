@@ -128,13 +128,14 @@ static bool assignKey(const char *key, int val) {
     return true;
   }
   if (!strcmp(key, "wob")) {
-    val = constrain(val, 0, 40);
+    val = constrain(val, -40, 40);
     if (val == wob) return false;
     wob = val;
     return true;
   }
   if (!strcmp(key, "ang")) {
     val = (val % 360 + 360) % 360;
+    if (val > 180) val -= 360;
     if (val == ang) return false;
     ang = val;
     return true;
