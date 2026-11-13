@@ -300,26 +300,26 @@ function draw(){
   drawHUD(L);
 }
 
-// Swapped from the bubble: its horizontal motion pans vertically, and its
-// vertical motion pans horizontally. The bubble itself is unchanged.
+// Swapped from the bubble and reversed, so the picture moves opposite the dot.
+// The bubble itself is unchanged.
 function drawPan(x, y, g, L, cols, rows){
   const zoom = 0.68;
   const nx = (S.mir ? (cols - 1 - x) : x) / cols - 0.5;
   const ny = y / rows - 0.5;
   const look = S.mir ? 1 : -1;
-  const cam = camAt(0.5 + nx * zoom + look * sway(L.lean) * 0.16, 0.5 + ny * zoom - sway(L.pitch) * 0.16);
+  const cam = camAt(0.5 + nx * zoom - look * sway(L.lean) * 0.16, 0.5 + ny * zoom + sway(L.pitch) * 0.16);
   const [px, py] = gridPos(x, y, g, L);
   const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
   const dim = cam.bright > L.thresh ? 1 : 0.35;
   paintBlock(px, py, s, cam.r * dim, cam.g * dim, cam.b * dim);
 }
 
-// Horizontal cut. The bubble's axes are swapped here: pitch slides the line
-// up and down, lean rotates it.
+// Horizontal cut, reversed from the bubble. Pitch slides the line the other
+// way, and lean rotates it the other way. The bubble itself is unchanged.
 function drawHorizon(x, y, g, L, cols, rows){
-  const ang = -sway(L.lean) * 0.9;
+  const ang = sway(L.lean) * 0.9;
   const nx = Math.sin(ang), ny = -Math.cos(ang);
-  const side = (x / cols - 0.5) * nx + (y / rows - 0.5) * ny + sway(L.pitch) * 0.36;
+  const side = (x / cols - 0.5) * nx + (y / rows - 0.5) * ny - sway(L.pitch) * 0.36;
   const sx = S.mir ? (cols - 1 - x) : x;
   const cam = camAt(sx / cols, y / rows);
   const [px, py] = gridPos(x, y, g, L);
