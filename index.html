@@ -46,6 +46,9 @@
   .mic:hover{border-color:var(--hot);color:var(--ink)}
   .mic.on{background:var(--hot);border-color:var(--hot);color:#2a0606}
   .mic[disabled]{opacity:.35;cursor:not-allowed}
+  .note{flex-shrink:0;width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--code-bg);color:var(--muted);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s;padding:0;line-height:1}
+  .note:hover{border-color:var(--cool);color:var(--ink)}
+  .note.on{background:var(--cool);border-color:var(--cool);color:#04201a}
   input[type=range]{width:100%;-webkit-appearance:none;height:5px;background:var(--line);border-radius:5px;outline:none}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
   input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
@@ -109,29 +112,30 @@
 
   <div class="controls">
     <div class="ctitle">▸ variables you control</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-10px">♪ pitch follows the note · 🎤 loudness follows the volume</div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic on" data-mic="grid" title="let mic drive this">🎤</button><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
+      <label><span class="lhs"><button class="note" data-pitch="grid" title="pitch drives this">♪</button><button class="mic on" data-mic="grid" title="loudness drives this">🎤</button><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
       <input type="range" id="grid" min="4" max="48" value="14">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="thresh" title="let mic drive this">🎤</button><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
+      <label><span class="lhs"><button class="note" data-pitch="thresh" title="pitch drives this">♪</button><button class="mic" data-mic="thresh" title="loudness drives this">🎤</button><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
       <input type="range" id="thresh" min="0" max="255" value="128">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="hue" title="let mic drive this">🎤</button><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
+      <label><span class="lhs"><button class="note on" data-pitch="hue" title="pitch drives this">♪</button><button class="mic" data-mic="hue" title="loudness drives this">🎤</button><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
       <input type="range" id="hue" min="0" max="360" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic on" data-mic="wob" title="let mic drive this">🎤</button><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
+      <label><span class="lhs"><button class="note" data-pitch="wob" title="pitch drives this">♪</button><button class="mic" data-mic="wob" title="loudness drives this">🎤</button><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
       <input type="range" id="wob" min="0" max="40" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="mic" data-mic="ang" title="let mic drive this">🎤</button><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
+      <label><span class="lhs"><button class="note" data-pitch="ang" title="pitch drives this">♪</button><button class="mic" data-mic="ang" title="loudness drives this">🎤</button><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
       <input type="range" id="ang" min="0" max="360" value="0">
     </div>
 
@@ -147,7 +151,9 @@
 
     <div class="micbar">
       <div class="mlabel"><span>▣ M5Stack <span id="m5State">(looking…)</span></span></div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.55">A previous program · B next program · C chunkier<br>hold B reset · hold C finer<br>tilt, pitch, and gyro are drawn on the projector</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.55">the button under the LEDs steps the program<br>hold it to reset<br>tilt and gyro are drawn on the projector</div>
+      <button class="micbtn" id="zeroTilt">zero tilt</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">level is the Atom's pose when you press this · <b id="tiltRead">—</b></div>
       <button class="micbtn" id="m5Connect" style="display:none">connect M5Stack</button>
     </div>
 
@@ -169,6 +175,7 @@
       <div class="krow"><kbd>A</kbd><b>wobAngle +45°</b></div>
       <div class="krow"><kbd>M</kbd><b>mirror</b></div>
       <div class="krow"><kbd>I</kbd><b>invert</b></div>
+      <div class="krow"><kbd>Z</kbd><b>zero tilt</b></div>
       <div class="krow"><kbd>R</kbd><b>reset all</b></div>
       <div class="krow"><kbd>space</kbd><b>start camera</b></div>
       <div class="krow"><kbd>M5 B</kbd><b>next program</b></div>
@@ -191,13 +198,16 @@ const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
 
 // ---- microphone ----
 let mic, micOn = false, micLevel = 0;        // micLevel: smoothed 0..1
-const micArmed = { grid:true, thresh:false, hue:false, wob:true, ang:false };
+const micArmed = { grid:true, thresh:false, hue:false, wob:false, ang:false };
+const pitchArmed = { grid:false, thresh:false, hue:true, wob:false, ang:false };
+let tiltZero = null;
 const bus = new BroadcastChannel("pixel-mirror");
 let liveAdd = {grid:0, thresh:0, hue:0, wob:0, ang:0};
 
 function snapshot(){
   return {type:"state", grid:base.grid, thresh:base.thresh, hue:base.hue, wob:base.wob, ang:base.ang,
-    mir: mirror ? 1 : 0, inv: invert ? 1 : 0, mode, micArm: Object.assign({}, micArmed)};
+    mir: mirror ? 1 : 0, inv: invert ? 1 : 0, mode,
+    micArm: Object.assign({}, micArmed), pitchArm: Object.assign({}, pitchArmed), tiltZero};
 }
 function publish(){ if(!m5Applying) bus.postMessage(snapshot()); }
 
@@ -243,6 +253,19 @@ function applyVar(id, val){
   $(lbl).textContent = id==="ang" ? (val + "°") : val;
 }
 function nudge(id, delta){ setVar(id, base[id] + delta); }
+
+// Move the slider to the value the picture is using, without treating it as a new drag.
+function showLive(id, val){
+  val = Math.round(val);
+  if(id === "hue" || id === "ang") val = (val % 360 + 360) % 360;
+  else {
+    const [lo, hi] = RANGE[id];
+    val = Math.max(lo, Math.min(hi, val));
+  }
+  applyVar(id, val);
+  const el = $(id);
+  if(document.activeElement !== el) el.value = val;
+}
 
 // M5Stack link. serve.py is the bridge; Web Serial is the fallback.
 let m5Applying = false;
@@ -295,17 +318,27 @@ function enableMic(){
   flash("mic listens from the projector window");
 }
 $("micEnable").onclick = enableMic;
+$("zeroTilt").onclick = () => {
+  bus.postMessage({type:"zeroTilt"});
+  flash("tilt zeroed");
+};
 
-// arm/disarm a variable so mic volume drives it
+function syncArmButtons(){
+  document.querySelectorAll(".mic").forEach(b => b.classList.toggle("on", !!micArmed[b.dataset.mic]));
+  document.querySelectorAll(".note").forEach(b => b.classList.toggle("on", !!pitchArmed[b.dataset.pitch]));
+}
+function toggleArm(btn, store, key, name){
+  store[key] = !store[key];
+  btn.classList.toggle("on", store[key]);
+  if(!micArmed[key] && !pitchArmed[key]) showLive(key, base[key]);
+  publish();
+  flash((store[key] ? name + " → " : name + " off ") + key);
+}
 document.querySelectorAll(".mic").forEach(btn=>{
-  btn.onclick = () => {
-    const id = btn.dataset.mic;
-    micArmed[id] = !micArmed[id];
-    btn.classList.toggle("on", micArmed[id]);
-    if(!micArmed[id]) applyVar(id, base[id]);   // release back to slider value
-    publish();
-    flash((micArmed[id] ? "mic → " : "mic off ") + id);
-  };
+  btn.onclick = () => toggleArm(btn, micArmed, btn.dataset.mic, "loudness");
+});
+document.querySelectorAll(".note").forEach(btn=>{
+  btn.onclick = () => toggleArm(btn, pitchArmed, btn.dataset.pitch, "pitch");
 });
 
 // each frame: for every armed variable, value = sliderBase + mic * (range above base)
@@ -349,11 +382,16 @@ window.addEventListener("keydown", e => {
     case "a": case "A": setVar("ang", (base.ang + 45) % 360); flash("wobAngle = " + base.ang + "°"); break;
     case "m": case "M": setToggle("mir", !mirror); flash("mirror " + (mirror?"on":"off")); break;
     case "i": case "I": setToggle("inv", !invert); flash("invert " + (invert?"on":"off")); break;
+    case "z": case "Z":
+      bus.postMessage({type:"zeroTilt"}); flash("tilt zeroed"); break;
     case "r": case "R":
+      tiltZero = null;
+      $("zeroTilt").classList.remove("on");
       setVar("grid",14); setVar("thresh",128); setVar("hue",0); setVar("wob",0); setVar("ang",0);
       setToggle("mir",true); setToggle("inv",false); setMode(0);
-      for(const id in micArmed){ micArmed[id]=false; }
-      document.querySelectorAll(".mic").forEach(b=>b.classList.remove("on"));
+      Object.assign(micArmed, {grid:true, thresh:false, hue:false, wob:false, ang:false});
+      Object.assign(pitchArmed, {grid:false, thresh:false, hue:true, wob:false, ang:false});
+      syncArmButtons();
       flash("reset"); break;
     case " ":
       openStage(); break;
@@ -480,13 +518,21 @@ connectBridge();
 bus.onmessage = (e) => {
   const m = e.data || {};
   if(m.type === "stage") publish();
+  if(m.type === "tiltZero"){
+    tiltZero = m.tiltZero;
+    $("zeroTilt").classList.add("on");
+  }
   if(m.type === "live" && m.add){
     liveAdd = m.add;
-    applyVar("grid", base.grid + m.add.grid);
-    applyVar("thresh", base.thresh + m.add.thresh);
-    applyVar("hue", base.hue + m.add.hue);
-    applyVar("wob", base.wob + m.add.wob);
-    applyVar("ang", base.ang + m.add.ang);
+    showLive("grid", base.grid + m.add.grid);
+    showLive("thresh", base.thresh + m.add.thresh);
+    showLive("hue", base.hue + m.add.hue);
+    showLive("wob", base.wob + m.add.wob);
+    showLive("ang", base.ang + m.add.ang);
+    if(m.lean != null && m.tip != null){
+      const fmt = (n) => (n >= 0 ? "+" : "") + Math.round(n) + "°";
+      $("tiltRead").textContent = "lean " + fmt(m.lean) + "  tip " + fmt(m.tip);
+    }
     updateMeter(m.mic || 0);
     $("micState").textContent = "(live on projector)";
     $("micState").style.color = "var(--hot)";

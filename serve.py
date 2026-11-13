@@ -114,6 +114,9 @@ def reader() -> None:
                 state.update(connected=False, error=str(exc))
                 time.sleep(2)
                 continue
+            if port is None:
+                time.sleep(2)
+                continue
             with ser_lock:
                 ser = port
             buf = b""
@@ -121,7 +124,7 @@ def reader() -> None:
             write_serial(b"pm dump\n")
         try:
             chunk = port.read(port.in_waiting or 1)
-        except serial.SerialException as exc:
+        except (serial.SerialException, AttributeError) as exc:
             print(f"m5 dropped: {exc}")
             state.update(connected=False, error=str(exc))
             with ser_lock:

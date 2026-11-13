@@ -28,25 +28,35 @@
 const bus = new BroadcastChannel("pixel-mirror");
 const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
 const S = {grid:14, thresh:128, hue:0, wob:0, ang:0, mir:true, inv:false, mode:0};
-const micArm = {grid:true, thresh:false, hue:false, wob:true, ang:false};
+const micArm = {grid:true, thresh:false, hue:false, wob:false, ang:false};
+const pitchArm = {grid:false, thresh:false, hue:true, wob:false, ang:false};
 
 let video, started = false;
 let micLevel = 0, micOn = false, analyser, micBuf, wave = new Uint8Array(0);
+let noteHue = 0;
 let roll = 0, pitch = 0, spin = 0;
+let tiltZero = null;
 let lastFrame = 0, lastLive = 0, frameBusy = false;
 
 function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
+function wrap180(d){ return ((d + 540) % 360) - 180; }
+
 function inputs(){
   const r = roll, p = pitch;
   const mic = micOn ? micLevel : 0;
-  const grid = clamp(Math.round(S.grid + (micArm.grid ? mic * 16 : 0)), 4, 48);
-  const thresh = clamp(Math.round(S.thresh + p * 2.2 + (micArm.thresh ? mic * 90 : 0)), 0, 255);
-  const hue = (S.hue + r * 4 + (micArm.hue ? mic * 160 : 0) + 3600) % 360;
-  const wob = clamp(S.wob + mic * (micArm.wob ? 34 : 16), 0, 40);
-  const ang = (S.ang + spin * 150 + (micArm.ang ? mic * 120 : 0) + 3600) % 360;
-  return {roll:r, pitch:p, spin, mic, grid, thresh, hue, wob, ang,
-    add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hue-S.hue, wob:wob-S.wob, ang:ang-S.ang}};
+  const note = noteHue / 360;
+  const grid = clamp(Math.round(S.grid + (micArm.grid ? mic * 16 : 0) + (pitchArm.grid ? note * 20 : 0)), 4, 48);
+  // Before zero, upright-for-a-Core is roll ≈ 90. After zero, both axes are degrees from that pose.
+  const lean = tiltZero ? wrap180(r - tiltZero.roll) : r - 90;
+  const tip = tiltZero ? wrap180(p - tiltZero.pitch) : p;
+  const thresh = clamp(Math.round(S.thresh + lean * 2.6 + (micArm.thresh ? mic * 90 : 0) + (pitchArm.thresh ? note * 120 : 0)), 0, 255);
+  const hueAdd = (pitchArm.hue ? noteHue : 0) + (micArm.hue ? mic * 160 : 0);
+  const hue = (S.hue + hueAdd + 3600) % 360;
+  const wob = clamp(S.wob + (micArm.wob ? mic * 34 : 0) + (pitchArm.wob ? note * 34 : 0), 0, 40);
+  const ang = (S.ang + tip * 4 + spin * 220 + (micArm.ang ? mic * 120 : 0) + (pitchArm.ang ? noteHue : 0) + 3600) % 360;
+  return {roll:r, pitch:tip, lean, tip, spin, mic, note:noteHue, grid, thresh, hue, wob, ang,
+    add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hueAdd, wob:wob-S.wob, ang:ang-S.ang}};
 }
 
 function setup(){
@@ -92,6 +102,50 @@ function readMic(){
     wave.copyWithin(0, 1);
     wave[wave.length - 1] = Math.round(micLevel * 255);
   }
+  readPitch();
+}
+
+// One trip around the hue wheel is one octave, then the colors repeat.
+// C (do) is the start of the wheel, so every C is the same color. The slider rotates that color.
+const NOTE_C = 261.6256;
+function easeHue(from, to, k){
+  const delta = ((to - from) % 360 + 540) % 360 - 180;
+  return (from + delta * k + 3600) % 360;
+}
+function readPitch(){
+  if(micLevel < 0.07 || micBuf.length < 64) return;
+  const rate = analyser.context.sampleRate;
+  const n = micBuf.length;
+  const minLag = Math.max(2, Math.floor(rate / 1400));
+  const maxLag = Math.min(n - 2, Math.floor(rate / 70));
+  const score = (lag) => {
+    let corr = 0;
+    for(let i = 0; i < n - lag; i += 2) corr += (micBuf[i] - 128) * (micBuf[i + lag] - 128);
+    return corr / ((n - lag) / 2);
+  };
+  let energy = 0;
+  for(let i = 0; i < n; i += 2){
+    const a = micBuf[i] - 128;
+    energy += a * a;
+  }
+  energy /= n / 2;
+  if(energy < 12) return;
+  // The first correlation peak is the note. Earlier lags look similar only because the wave has not turned around yet.
+  const corr = new Float32Array(maxLag + 2);
+  for(let lag = minLag - 1; lag <= maxLag + 1 && lag < n - 2; lag++){
+    if(lag > 0) corr[lag] = score(lag);
+  }
+  let lag = 0;
+  for(let i = minLag; i <= maxLag; i++){
+    if(corr[i] >= corr[i - 1] && corr[i] > corr[i + 1] && corr[i] > energy * 0.35){
+      lag = i;
+      break;
+    }
+  }
+  if(!lag) return;
+  const freq = rate / lag;
+  const within = ((Math.log2(freq / NOTE_C) % 1) + 1) % 1;
+  noteHue = easeHue(noteHue, within * 360, 0.45);
 }
 
 function startCam(){
@@ -110,7 +164,7 @@ function draw(){
   const L = inputs();
   if(millis() - lastLive > 120){
     lastLive = millis();
-    bus.postMessage({type:"live", mic:L.mic, roll:L.roll, pitch:L.pitch, spin:L.spin, add:L.add, mode:S.mode});
+    bus.postMessage({type:"live", mic:L.mic, roll, pitch, lean:L.lean, tip:L.tip, spin:L.spin, add:L.add, mode:S.mode, tiltZero});
   }
   if(!started || !video || video.width === 0){
     background(0);
@@ -123,7 +177,7 @@ function draw(){
   const g = L.grid;
   const cols = Math.max(1, Math.floor(width / g));
   const rows = Math.max(1, Math.floor(height / g));
-  const punch = 0.7 + L.mic * 0.85;
+  const punch = micArm.wob ? (0.7 + L.mic * 0.85) : 1;
 
   for(let y = 0; y < rows; y++){
     for(let x = 0; x < cols; x++){
@@ -189,12 +243,25 @@ function sendMatrix(){
   const data = drawingContext.getImageData(0, 0, width, height).data;
   const buf = new Uint8Array(16 * 12);
   const stride = width * 4;
+  const cellW = width / 16, cellH = height / 12;
   for(let y = 0; y < 12; y++){
-    const py = Math.min(height - 1, Math.floor((y + 0.5) * height / 12));
+    const y0 = Math.floor(y * cellH);
+    const y1 = Math.max(y0 + 1, Math.floor((y + 1) * cellH));
+    const stepY = Math.max(1, Math.floor((y1 - y0) / 6));
     for(let x = 0; x < 16; x++){
-      const px = Math.min(width - 1, Math.floor((x + 0.5) * width / 16));
-      const i = py * stride + px * 4;
-      buf[y * 16 + x] = packDot(data[i], data[i + 1], data[i + 2]);
+      const x0 = Math.floor(x * cellW);
+      const x1 = Math.max(x0 + 1, Math.floor((x + 1) * cellW));
+      const stepX = Math.max(1, Math.floor((x1 - x0) / 6));
+      let br = 0, bg = 0, bb = 0, peak = 0;
+      for(let py = y0; py < y1; py += stepY){
+        for(let px = x0; px < x1; px += stepX){
+          const i = py * stride + px * 4;
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const p = r + g + b;
+          if(p > peak){ peak = p; br = r; bg = g; bb = b; }
+        }
+      }
+      buf[y * 16 + x] = packDot(br, bg, bb);
     }
   }
   frameBusy = true;
@@ -210,8 +277,8 @@ function drawHUD(L){
   textFont("monospace");
   const rows = [
     ["mic", L.mic, "wobble", Math.round(S.wob), Math.round(L.add.wob)],
-    ["tilt", (L.roll / 40 + 1) / 2, "hueShift", Math.round(S.hue), Math.round(L.add.hue)],
-    ["pitch", (L.pitch / 40 + 1) / 2, "threshold", Math.round(S.thresh), Math.round(L.add.thresh)],
+    ["pitch", L.note / 360, "hueShift", Math.round(S.hue), Math.round(L.add.hue)],
+    ["tilt", (L.lean / 40 + 1) / 2, "threshold", Math.round(S.thresh), Math.round(L.add.thresh)],
     ["gyro", L.spin, "wobAngle", Math.round(S.ang), Math.round(L.add.ang)]
   ];
   rows.forEach((row, i) => {
@@ -240,7 +307,7 @@ function drawHUD(L){
   noStroke();
   fill(0, 0, 100);
   textSize(12);
-  text("mic → wobble", width - 192, 30);
+  text("pitch → hue", width - 192, 30);
 
   // spirit level for tilt
   const cx = 70, cy = 48;
@@ -251,8 +318,8 @@ function drawHUD(L){
   ellipse(cx, cy, 52, 52);
   noStroke();
   fill(150, 50, 100);
-  const bx = cx + clamp(L.roll, -28, 28);
-  const by = cy + clamp(L.pitch, -28, 28);
+  const bx = cx + clamp(L.pitch, -28, 28);
+  const by = cy + clamp(L.lean, -28, 28);
   ellipse(bx, by, 14, 14);
   fill(0, 0, 100);
   textSize(11);
@@ -269,10 +336,17 @@ function applyState(m){
   if(m.inv != null) S.inv = !!m.inv;
   if(m.mode != null) S.mode = m.mode;
   if(m.micArm) Object.assign(micArm, m.micArm);
+  if(m.pitchArm) Object.assign(pitchArm, m.pitchArm);
+  if("tiltZero" in m) tiltZero = m.tiltZero;
+}
+function zeroTilt(){
+  tiltZero = {roll, pitch};
+  bus.postMessage({type:"tiltZero", tiltZero});
 }
 bus.onmessage = (e) => {
   const m = e.data || {};
   if(m.type === "state") applyState(m);
+  if(m.type === "zeroTilt") zeroTilt();
   if(m.type === "cam" && !started) startCam();
   if(m.type === "wantMic") startMic().catch(()=>{});
 };
