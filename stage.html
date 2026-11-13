@@ -26,7 +26,7 @@
 </div>
 <script>
 const bus = new BroadcastChannel("pixel-mirror");
-const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
+const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido","lean pan","horizon","wedges"];
 const S = {grid:14, thresh:128, hue:0, wob:0, ang:0, mir:true, inv:false, mode:0};
 const micArm = {grid:true, thresh:false, hue:false, wob:false, ang:false};
 const pitchArm = {grid:false, thresh:false, hue:true, wob:false, ang:false};
@@ -44,6 +44,40 @@ let lastFrame = 0, lastLive = 0, frameBusy = false;
 function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
 function wrap180(d){ return ((d + 540) % 360) - 180; }
+
+// Degrees away from the zeroed pose. A few degrees of rest do nothing; about 28° is the full move.
+function sway(deg){
+  const a = Math.abs(deg) - 4;
+  if(a <= 0) return 0;
+  return Math.sign(deg) * clamp(a / 24, 0, 1);
+}
+
+function camAt(u, v){
+  const vx = Math.floor(clamp(u, 0, 0.999) * video.width);
+  const vy = Math.floor(clamp(v, 0, 0.999) * video.height);
+  const i = (vy * video.width + vx) * 4;
+  let r = video.pixels[i], g = video.pixels[i + 1], b = video.pixels[i + 2];
+  let bright = (r + g + b) / 3;
+  if(S.inv){
+    bright = 255 - bright;
+    r = 255 - r; g = 255 - g; b = 255 - b;
+  }
+  return {r, g, b, bright};
+}
+
+function cellPos(x, y, g, L){
+  const wob = L.wob * Math.sin((x + y) * 0.4 + frameCount * 0.08);
+  const a = L.ang * Math.PI / 180;
+  return [x * g + g / 2 + wob * Math.cos(a), y * g + g / 2 + wob * Math.sin(a)];
+}
+
+function paintBlock(px, py, s, r, g, b){
+  colorMode(RGB, 255);
+  fill((r + Lhue) % 256, g, b);
+  colorMode(HSB, 360, 100, 100, 255);
+  rect(px - s / 2, py - s / 2, s, s);
+}
+let Lhue = 0;
 
 function extra(key, micSpan, pitchValue, leanK, tiltK, gyroK, lean, tip){
   return (micArm[key] ? micSpan : 0)
@@ -196,6 +230,10 @@ function draw(){
 
   for(let y = 0; y < rows; y++){
     for(let x = 0; x < cols; x++){
+      if(S.mode >= 4){
+        drawPose(S.mode, x, y, g, L, cols, rows);
+        continue;
+      }
       let sx = S.mir ? (cols - 1 - x) : x;
       let vx = Math.floor(sx / cols * video.width);
       let vy = Math.floor(y / rows * video.height);
@@ -239,6 +277,60 @@ function draw(){
   }
   sendMatrix();
   drawHUD(L);
+}
+
+// Lean slides the window left and right. Pitch slides it up and down.
+function drawPan(x, y, g, L, cols, rows){
+  const zoom = 0.68;
+  const nx = (S.mir ? (cols - 1 - x) : x) / cols - 0.5;
+  const ny = y / rows - 0.5;
+  const cam = camAt(0.5 + nx * zoom + sway(L.lean) * 0.16, 0.5 + ny * zoom + sway(L.tip) * 0.16);
+  const [px, py] = cellPos(x, y, g, L);
+  const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
+  const dim = cam.bright > L.thresh ? 1 : 0.35;
+  paintBlock(px, py, s, cam.r * dim, cam.g * dim, cam.b * dim);
+}
+
+// Pitch sets the height of a line across the frame. Lean rotates that line.
+function drawHorizon(x, y, g, L, cols, rows){
+  const ang = sway(L.lean) * 0.9;
+  const nx = Math.sin(ang), ny = -Math.cos(ang);
+  const side = (x / cols - 0.5) * nx + (y / rows - 0.5) * ny - sway(L.tip) * 0.36;
+  const sx = S.mir ? (cols - 1 - x) : x;
+  const cam = camAt(sx / cols, y / rows);
+  const [px, py] = cellPos(x, y, g, L);
+  const s = Math.max(2, g - 2);
+  if(Math.abs(side) < 0.028){
+    fill(L.hue, 70, 100);
+    rect(px - s / 2, py - s / 2, s, s);
+    return;
+  }
+  const dim = side > 0 ? 1 : (cam.bright > L.thresh ? 0.42 : 0.12);
+  paintBlock(px, py, s, cam.r * dim, cam.g * dim, cam.b * dim);
+}
+
+// Pitch sets how many folds. Lean rotates them.
+function drawWedges(x, y, g, L, cols, rows){
+  const slices = clamp(6 + Math.round(sway(L.tip) * 4), 3, 12);
+  let dx = x / cols - 0.5;
+  const dy = y / rows - 0.5;
+  if(S.mir) dx = -dx;
+  let ang = Math.atan2(dy, dx) + sway(L.lean) * 1.2;
+  const slice = Math.PI * 2 / slices;
+  let folded = ((ang % slice) + slice) % slice;
+  if(folded > slice / 2) folded = slice - folded;
+  const rad = Math.min(1, Math.hypot(dx, dy) / 0.55);
+  const cam = camAt(0.5 + Math.cos(folded) * rad * 0.5, 0.5 + Math.sin(folded) * rad * 0.5);
+  const [px, py] = cellPos(x, y, g, L);
+  const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
+  paintBlock(px, py, s, cam.r, cam.g, cam.b);
+}
+
+function drawPose(mode, x, y, g, L, cols, rows){
+  Lhue = L.hue;
+  if(mode === 4) drawPan(x, y, g, L, cols, rows);
+  else if(mode === 5) drawHorizon(x, y, g, L, cols, rows);
+  else drawWedges(x, y, g, L, cols, rows);
 }
 
 function packDot(r, g, b){
@@ -346,7 +438,7 @@ function drawHUD(L){
   ellipse(bx, by, 14, 14);
   fill(0, 0, 100);
   textSize(11);
-  text("lean", 22, 28);
+  text(modeNames[S.mode] || "", 22, 28);
 }
 
 function applyState(m){
@@ -392,7 +484,7 @@ function applyM5(line){
   if(p[1] !== "set" || p.length < 4) return;
   const key = p[2], val = Number(p[3]);
   if(Number.isNaN(val)) return;
-  if(key === "mode") S.mode = val;
+  if(key === "mode") S.mode = ((val % modeNames.length) + modeNames.length) % modeNames.length;
   else if(key === "mir") S.mir = val !== 0;
   else if(key === "inv") S.inv = val !== 0;
   else if(key in S) S[key] = val;

@@ -11,7 +11,11 @@ static const int ROWS = 12;
 static const int PX_N = COLS * ROWS;
 static const int LED_N = 25;
 
-static const char *MODES[] = {"ascii dots", "color blocks", "edge glow", "mirror kaleido"};
+static const int MODE_N = 7;
+static const char *MODES[] = {
+  "ascii dots", "color blocks", "edge glow", "mirror kaleido",
+  "lean pan", "horizon", "wedges"
+};
 
 static int mode = 0;
 static int grid = 14;
@@ -85,8 +89,9 @@ static void showLeds() {
 }
 
 static void setMode(int m) {
-  mode = (m % 4 + 4) % 4;
+  mode = (m % MODE_N + MODE_N) % MODE_N;
   Serial.printf("pm set mode %d\n", mode);
+  (void)MODES[mode];
   showLeds();
 }
 
@@ -99,7 +104,7 @@ static void setGrid(int g) {
 
 static bool assignKey(const char *key, int val) {
   if (!strcmp(key, "mode")) {
-    val = constrain(val, 0, 3);
+    val = constrain(val, 0, MODE_N - 1);
     if (val == mode) return false;
     mode = val;
     return true;

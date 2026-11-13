@@ -111,6 +111,9 @@
       <button class="mode" data-mode="1">color blocks</button>
       <button class="mode" data-mode="2">edge glow</button>
       <button class="mode" data-mode="3">mirror kaleido</button>
+      <button class="mode" data-mode="4">lean pan</button>
+      <button class="mode" data-mode="5">horizon</button>
+      <button class="mode" data-mode="6">wedges</button>
     </div>
   </div>
 
@@ -206,7 +209,7 @@
   <div class="keys">
     <div class="ktitle">⌨ keyboard controls <span style="color:var(--muted);text-transform:none;letter-spacing:0">— click the page once so it listens for keys</span></div>
     <div class="kgrid">
-      <div class="krow"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><b>switch mode</b></div>
+      <div class="krow"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd><kbd>6</kbd><kbd>7</kbd><b>switch mode</b></div>
       <div class="krow"><kbd>←</kbd><kbd>→</kbd><b>gridSize</b></div>
       <div class="krow"><kbd>↓</kbd><kbd>↑</kbd><b>threshold</b></div>
       <div class="krow"><kbd>H</kbd><b>hueShift +60</b></div>
@@ -233,7 +236,7 @@ let gridSize = 14, threshold = 128, hueShift = 0, wobble = 0, wobAngle = 0;
 let mirror = true, invert = false, mode = 0;
 
 let video, started = false;
-const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
+const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido","lean pan","horizon","wedges"];
 
 // ---- microphone ----
 let mic, micOn = false, micLevel = 0;        // micLevel: smoothed 0..1
@@ -342,7 +345,7 @@ function setToggle(id, val){
 }
 
 function setMode(m){
-  mode = m;
+  mode = ((m % modeNames.length) + modeNames.length) % modeNames.length;
   document.querySelectorAll(".mode").forEach(b=>b.classList.toggle("on", +b.dataset.mode===m));
   $("modeName").textContent = modeNames[m];
   renderCode();
@@ -430,8 +433,8 @@ window.addEventListener("keydown", e => {
   if(e.metaKey || e.ctrlKey || e.altKey) return;   // leave browser shortcuts alone
   let handled = true;
   switch(e.key){
-    case "1": case "2": case "3": case "4":
-      setMode(+e.key - 1); flash("mode → " + modeNames[+e.key-1]); break;
+    case "1": case "2": case "3": case "4": case "5": case "6": case "7":
+      setMode(+e.key - 1); flash("mode → " + modeNames[+e.key - 1]); break;
     case "ArrowRight": nudge("grid", +2); flash("gridSize = " + gridSize); break;
     case "ArrowLeft":  nudge("grid", -2); flash("gridSize = " + gridSize); break;
     case "ArrowUp":    nudge("thresh", +8); flash("threshold = " + threshold); break;
