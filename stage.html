@@ -30,6 +30,9 @@ const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
 const S = {grid:14, thresh:128, hue:0, wob:0, ang:0, mir:true, inv:false, mode:0};
 const micArm = {grid:true, thresh:false, hue:false, wob:false, ang:false};
 const pitchArm = {grid:false, thresh:false, hue:true, wob:false, ang:false};
+const leanArm = {grid:false, thresh:true, hue:false, wob:false, ang:false};
+const tiltArm = {grid:false, thresh:false, hue:false, wob:false, ang:true};
+const gyroArm = {grid:false, thresh:false, hue:false, wob:false, ang:true};
 
 let video, started = false;
 let micLevel = 0, micOn = false, analyser, micBuf, wave = new Uint8Array(0);
@@ -42,21 +45,33 @@ function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
 function wrap180(d){ return ((d + 540) % 360) - 180; }
 
+function extra(key, micSpan, pitchValue, leanK, tiltK, gyroK, lean, tip){
+  return (micArm[key] ? micSpan : 0)
+    + (pitchArm[key] ? pitchValue : 0)
+    + (leanArm[key] ? lean * leanK : 0)
+    + (tiltArm[key] ? tip * tiltK : 0)
+    + (gyroArm[key] ? spin * gyroK : 0);
+}
+
 function inputs(){
   const r = roll, p = pitch;
   const mic = micOn ? micLevel : 0;
   const note = noteHue / 360;
-  const grid = clamp(Math.round(S.grid + (micArm.grid ? mic * 16 : 0) + (pitchArm.grid ? note * 20 : 0)), 4, 48);
   // Before zero, upright-for-a-Core is roll ≈ 90. After zero, both axes are degrees from that pose.
   const lean = tiltZero ? wrap180(r - tiltZero.roll) : r - 90;
   const tip = tiltZero ? wrap180(p - tiltZero.pitch) : p;
-  const thresh = clamp(Math.round(S.thresh + lean * 2.6 + (micArm.thresh ? mic * 90 : 0) + (pitchArm.thresh ? note * 120 : 0)), 0, 255);
-  const hueAdd = (pitchArm.hue ? noteHue : 0) + (micArm.hue ? mic * 160 : 0);
+  const gridAdd = extra("grid", mic * 16, note * 20, 0.4, 0.4, 16, lean, tip);
+  const threshAdd = extra("thresh", mic * 90, note * 120, 2.6, 2.6, 90, lean, tip);
+  const hueAdd = extra("hue", mic * 160, noteHue, 4, 4, 160, lean, tip);
+  const wobAdd = extra("wob", mic * 34, note * 34, 0.5, 0.5, 20, lean, tip);
+  const angAdd = extra("ang", mic * 120, noteHue, 4, 4, 220, lean, tip);
+  const grid = clamp(Math.round(S.grid + gridAdd), 4, 48);
+  const thresh = clamp(Math.round(S.thresh + threshAdd), 0, 255);
   const hue = (S.hue + hueAdd + 3600) % 360;
-  const wob = clamp(S.wob + (micArm.wob ? mic * 34 : 0) + (pitchArm.wob ? note * 34 : 0), 0, 40);
-  const ang = (S.ang + tip * 4 + spin * 220 + (micArm.ang ? mic * 120 : 0) + (pitchArm.ang ? noteHue : 0) + 3600) % 360;
+  const wob = clamp(S.wob + wobAdd, 0, 40);
+  const ang = (S.ang + angAdd + 3600) % 360;
   return {roll:r, pitch:tip, lean, tip, spin, mic, note:noteHue, grid, thresh, hue, wob, ang,
-    add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hueAdd, wob:wob-S.wob, ang:ang-S.ang}};
+    add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hueAdd, wob:wob-S.wob, ang:angAdd}};
 }
 
 function setup(){
@@ -275,11 +290,16 @@ function drawHUD(L){
   fill(0, 0, 100);
   textSize(15);
   textFont("monospace");
+  const who = (store) => {
+    const names = {grid:"grid", thresh:"thresh", hue:"hue", wob:"wob", ang:"angle"};
+    const hit = Object.keys(names).filter(k => store[k]).map(k => names[k]);
+    return hit.length ? hit.join(" ") : "off";
+  };
   const rows = [
     ["mic", L.mic, "wobble", Math.round(S.wob), Math.round(L.add.wob)],
     ["pitch", L.note / 360, "hueShift", Math.round(S.hue), Math.round(L.add.hue)],
-    ["tilt", (L.lean / 40 + 1) / 2, "threshold", Math.round(S.thresh), Math.round(L.add.thresh)],
-    ["gyro", L.spin, "wobAngle", Math.round(S.ang), Math.round(L.add.ang)]
+    ["lean", (L.lean / 40 + 1) / 2, who(leanArm), 0, 0, "who"],
+    ["gyro", L.spin, who(gyroArm), 0, 0, "who"]
   ];
   rows.forEach((row, i) => {
     const y = y0 + 14 + i * 24;
@@ -291,7 +311,10 @@ function drawHUD(L){
     rect(90, y, 140 * clamp(row[1], 0, 1), 12, 3);
     fill(0, 0, 100);
     const sign = row[4] >= 0 ? "+" : "";
-    text(row[2] + "  " + row[3] + " " + sign + row[4] + "   = " + (row[3] + row[4]), 248, y + 12);
+    const label = row[5] === "who"
+      ? row[2]
+      : row[2] + "  " + row[3] + " " + sign + row[4] + "   = " + (row[3] + row[4]);
+    text(label, 248, y + 12);
   });
 
   // mic trace
@@ -323,7 +346,7 @@ function drawHUD(L){
   ellipse(bx, by, 14, 14);
   fill(0, 0, 100);
   textSize(11);
-  text("tilt", 22, 28);
+  text("lean", 22, 28);
 }
 
 function applyState(m){
@@ -337,6 +360,9 @@ function applyState(m){
   if(m.mode != null) S.mode = m.mode;
   if(m.micArm) Object.assign(micArm, m.micArm);
   if(m.pitchArm) Object.assign(pitchArm, m.pitchArm);
+  if(m.leanArm) Object.assign(leanArm, m.leanArm);
+  if(m.tiltArm) Object.assign(tiltArm, m.tiltArm);
+  if(m.gyroArm) Object.assign(gyroArm, m.gyroArm);
   if("tiltZero" in m) tiltZero = m.tiltZero;
 }
 function zeroTilt(){
