@@ -87,6 +87,14 @@ function cellPos(x, y, g, L, cols, rows){
   return [(cx + rx * scale) * g + g / 2, (cy + ry * scale) * g + g / 2];
 }
 
+// The older placement. A zero wobble leaves every cell on its grid point,
+// so lean pan is not spun by the angle control.
+function gridPos(x, y, g, L){
+  const wob = L.wob * Math.sin((x + y) * 0.4 + frameCount * 0.08);
+  const a = L.ang * Math.PI / 180;
+  return [x * g + g / 2 + wob * Math.cos(a), y * g + g / 2 + wob * Math.sin(a)];
+}
+
 function paintBlock(px, py, s, r, g, b){
   colorMode(RGB, 255);
   fill((r + Lhue) % 256, g, b);
@@ -298,20 +306,20 @@ function drawPan(x, y, g, L, cols, rows){
   const nx = (S.mir ? (cols - 1 - x) : x) / cols - 0.5;
   const ny = y / rows - 0.5;
   const cam = camAt(0.5 + nx * zoom + sway(L.lean) * 0.16, 0.5 + ny * zoom + sway(L.tip) * 0.16);
-  const [px, py] = cellPos(x, y, g, L, cols, rows);
+  const [px, py] = gridPos(x, y, g, L);
   const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
   const dim = cam.bright > L.thresh ? 1 : 0.35;
   paintBlock(px, py, s, cam.r * dim, cam.g * dim, cam.b * dim);
 }
 
-// The cut stands vertical at rest. Pitch slides it left and right. Lean rotates it.
+// Vertical cut. Lean slides it left and right. Pitch rotates it.
 function drawHorizon(x, y, g, L, cols, rows){
-  const ang = sway(L.lean) * 0.9;
+  const ang = sway(L.tip) * 0.9;
   const nx = Math.sin(ang), ny = -Math.cos(ang);
-  const side = (y / rows - 0.5) * nx + (x / cols - 0.5) * ny - sway(L.tip) * 0.36;
+  const side = (y / rows - 0.5) * nx + (x / cols - 0.5) * ny - sway(L.lean) * 0.36;
   const sx = S.mir ? (cols - 1 - x) : x;
   const cam = camAt(sx / cols, y / rows);
-  const [px, py] = cellPos(x, y, g, L, cols, rows);
+  const [px, py] = gridPos(x, y, g, L);
   const s = Math.max(2, g - 2);
   if(Math.abs(side) < 0.028){
     fill(L.hue, 70, 100);
