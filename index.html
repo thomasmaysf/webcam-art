@@ -166,7 +166,7 @@
         <button class="tilt" data-tilt="wob" title="tilt drives this">↕</button>
         <button class="gyro" data-gyro="wob" title="gyro drives this">↻</button>
       </div>
-      <input type="range" id="wob" min="0" max="40" value="0">
+      <input type="range" id="wob" min="-40" max="40" value="0">
     </div>
 
     <div class="ctrl">
@@ -178,7 +178,7 @@
         <button class="tilt on" data-tilt="ang" title="tilt drives this">↕</button>
         <button class="gyro on" data-gyro="ang" title="gyro drives this">↻</button>
       </div>
-      <input type="range" id="ang" min="0" max="360" value="0">
+      <input type="range" id="ang" min="-180" max="180" value="0">
     </div>
 
     <div class="toggle">
@@ -272,7 +272,7 @@ function $(id){return document.getElementById(id)}
 $("start").onclick = openStage;
 
 // ranges each variable is allowed to move within
-const RANGE = { grid:[4,48], thresh:[0,255], hue:[0,360], wob:[0,40], ang:[0,360] };
+const RANGE = { grid:[4,48], thresh:[0,255], hue:[0,360], wob:[-40,40], ang:[-180,180] };
 // the slider/base value (mic adds on top of this for armed vars)
 const base = { grid:14, thresh:128, hue:0, wob:0, ang:0 };
 
@@ -304,7 +304,8 @@ function nudge(id, delta){ setVar(id, base[id] + delta); }
 // Move the slider to the value the picture is using, without treating it as a new drag.
 function showLive(id, val){
   val = Math.round(val);
-  if(id === "hue" || id === "ang") val = (val % 360 + 360) % 360;
+  if(id === "hue") val = (val % 360 + 360) % 360;
+  else if(id === "ang") val = ((val + 180) % 360 + 360) % 360 - 180;
   else {
     const [lo, hi] = RANGE[id];
     val = Math.max(lo, Math.min(hi, val));
@@ -440,8 +441,8 @@ window.addEventListener("keydown", e => {
     case "ArrowUp":    nudge("thresh", +8); flash("threshold = " + threshold); break;
     case "ArrowDown":  nudge("thresh", -8); flash("threshold = " + threshold); break;
     case "h": case "H": setVar("hue", (base.hue + 60) % 360); flash("hueShift = " + base.hue); break;
-    case "w": case "W": setVar("wob", base.wob >= 40 ? 0 : base.wob + 8); flash("wobble = " + base.wob); break;
-    case "a": case "A": setVar("ang", (base.ang + 45) % 360); flash("wobAngle = " + base.ang + "°"); break;
+    case "w": case "W": setVar("wob", base.wob >= 40 ? -40 : base.wob + 8); flash("wobble = " + base.wob); break;
+    case "a": case "A": setVar("ang", ((base.ang + 45 + 180) % 360 + 360) % 360 - 180); flash("wobAngle = " + base.ang + "°"); break;
     case "m": case "M": setToggle("mir", !mirror); flash("mirror " + (mirror?"on":"off")); break;
     case "i": case "I": setToggle("inv", !invert); flash("invert " + (invert?"on":"off")); break;
     case "z": case "Z":
@@ -476,13 +477,13 @@ function renderCode(changedId){
 <span class="ck">let</span> ${L("gridSize",gridSize,"grid")};   <span class="cc">// size of each chunk</span><br>
 <span class="ck">let</span> ${L("threshold",threshold,"thresh")};  <span class="cc">// brightness cutoff</span><br>
 <span class="ck">let</span> ${L("hueShift",hueShift,"hue")};     <span class="cc">// rotate the colors</span><br>
-<span class="ck">let</span> ${L("wobble",wobble,"wob")};       <span class="cc">// warp amount</span><br>
-<span class="ck">let</span> ${L("wobAngle",wobAngle,"ang")};     <span class="cc">// warp direction (degrees)</span><br>
+<span class="ck">let</span> ${L("wobble",wobble,"wob")};       <span class="cc">// 0 keeps the size, + spreads, − pulls in</span><br>
+<span class="ck">let</span> ${L("wobAngle",wobAngle,"ang")};     <span class="cc">// 0 is level, turns around the center</span><br>
 <span class="ck">let</span> ${L("mirror",mirror,"mir")}, ${L("invert",invert,"inv")};<br><br>
 <span class="cf">function</span> <span class="cs">draw</span>() {<br>
 &nbsp;&nbsp;<span class="ck">for</span> (cell <span class="ck">of</span> webcam) {<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">let</span> wob = <span class="cn">${wobble}</span> * sin(t);<br>
-&nbsp;&nbsp;&nbsp;&nbsp;px += wob * cos(<span class="cn">${wobAngle}</span>°);  py += wob * sin(<span class="cn">${wobAngle}</span>°);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;turn the cell around the center by <span class="cn">${wobAngle}</span>°;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale it by 1 + <span class="cn">${wobble}</span>/40;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="ck">if</span> (bright &gt; <span class="cn">${threshold}</span>) draw a dot, hue=<span class="cn">${hueShift}</span>;<br>
 &nbsp;&nbsp;}<br>
 }`;

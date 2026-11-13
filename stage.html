@@ -65,10 +65,26 @@ function camAt(u, v){
   return {r, g, b, bright};
 }
 
-function cellPos(x, y, g, L){
-  const wob = L.wob * Math.sin((x + y) * 0.4 + frameCount * 0.08);
+function wrapSigned(d, half){
+  const span = half * 2;
+  return ((d + half) % span + span) % span - half;
+}
+
+// Wobble and angle are both zero at the middle. The middle cell stays on the
+// middle of the frame; angle turns the picture around that point, wobble
+// spreads it out or pulls it in.
+function cellPos(x, y, g, L, cols, rows){
+  const cx = (cols - 1) / 2;
+  const cy = (rows - 1) / 2;
+  const dx = x - cx;
+  const dy = y - cy;
   const a = L.ang * Math.PI / 180;
-  return [x * g + g / 2 + wob * Math.cos(a), y * g + g / 2 + wob * Math.sin(a)];
+  const cs = Math.cos(a), sn = Math.sin(a);
+  let rx = dx * cs - dy * sn;
+  let ry = dx * sn + dy * cs;
+  const breathe = 1 + Math.sin(frameCount * 0.08) * (L.wob / 80);
+  const scale = (1 + L.wob / 40) * breathe;
+  return [(cx + rx * scale) * g + g / 2, (cy + ry * scale) * g + g / 2];
 }
 
 function paintBlock(px, py, s, r, g, b){
@@ -102,8 +118,8 @@ function inputs(){
   const grid = clamp(Math.round(S.grid + gridAdd), 4, 48);
   const thresh = clamp(Math.round(S.thresh + threshAdd), 0, 255);
   const hue = (S.hue + hueAdd + 3600) % 360;
-  const wob = clamp(S.wob + wobAdd, 0, 40);
-  const ang = (S.ang + angAdd + 3600) % 360;
+  const wob = clamp(S.wob + wobAdd, -40, 40);
+  const ang = wrapSigned(S.ang + angAdd, 180);
   return {roll:r, pitch:tip, lean, tip, spin, mic, note:noteHue, grid, thresh, hue, wob, ang,
     add:{grid:grid-S.grid, thresh:thresh-S.thresh, hue:hueAdd, wob:wob-S.wob, ang:angAdd}};
 }
@@ -241,10 +257,7 @@ function draw(){
       let r = video.pixels[i], gc = video.pixels[i+1], b = video.pixels[i+2];
       let bright = (r + gc + b) / 3;
       if(S.inv) bright = 255 - bright;
-      let wob = L.wob * Math.sin((x + y) * 0.4 + frameCount * 0.08);
-      let a = L.ang * Math.PI / 180;
-      let px = x * g + g/2 + wob * Math.cos(a);
-      let py = y * g + g/2 + wob * Math.sin(a);
+      let [px, py] = cellPos(x, y, g, L, cols, rows);
       let hue = (bright / 255 * 160 + 200 + L.hue) % 360;
 
       if(S.mode === 0){
@@ -285,20 +298,20 @@ function drawPan(x, y, g, L, cols, rows){
   const nx = (S.mir ? (cols - 1 - x) : x) / cols - 0.5;
   const ny = y / rows - 0.5;
   const cam = camAt(0.5 + nx * zoom + sway(L.lean) * 0.16, 0.5 + ny * zoom + sway(L.tip) * 0.16);
-  const [px, py] = cellPos(x, y, g, L);
+  const [px, py] = cellPos(x, y, g, L, cols, rows);
   const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
   const dim = cam.bright > L.thresh ? 1 : 0.35;
   paintBlock(px, py, s, cam.r * dim, cam.g * dim, cam.b * dim);
 }
 
-// Pitch sets the height of a line across the frame. Lean rotates that line.
+// The cut stands vertical at rest. Pitch slides it left and right. Lean rotates it.
 function drawHorizon(x, y, g, L, cols, rows){
   const ang = sway(L.lean) * 0.9;
   const nx = Math.sin(ang), ny = -Math.cos(ang);
-  const side = (x / cols - 0.5) * nx + (y / rows - 0.5) * ny - sway(L.tip) * 0.36;
+  const side = (y / rows - 0.5) * nx + (x / cols - 0.5) * ny - sway(L.tip) * 0.36;
   const sx = S.mir ? (cols - 1 - x) : x;
   const cam = camAt(sx / cols, y / rows);
-  const [px, py] = cellPos(x, y, g, L);
+  const [px, py] = cellPos(x, y, g, L, cols, rows);
   const s = Math.max(2, g - 2);
   if(Math.abs(side) < 0.028){
     fill(L.hue, 70, 100);
@@ -321,7 +334,7 @@ function drawWedges(x, y, g, L, cols, rows){
   if(folded > slice / 2) folded = slice - folded;
   const rad = Math.min(1, Math.hypot(dx, dy) / 0.55);
   const cam = camAt(0.5 + Math.cos(folded) * rad * 0.5, 0.5 + Math.sin(folded) * rad * 0.5);
-  const [px, py] = cellPos(x, y, g, L);
+  const [px, py] = cellPos(x, y, g, L, cols, rows);
   const s = Math.max(2, (g - 2) * (micArm.wob ? (0.7 + L.mic * 0.85) : 1));
   paintBlock(px, py, s, cam.r, cam.g, cam.b);
 }
