@@ -49,6 +49,10 @@
   .note{flex-shrink:0;width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--code-bg);color:var(--muted);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s;padding:0;line-height:1}
   .note:hover{border-color:var(--cool);color:var(--ink)}
   .note.on{background:var(--cool);border-color:var(--cool);color:#04201a}
+  .lean,.tilt,.gyro{flex-shrink:0;width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--code-bg);color:var(--muted);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s;padding:0;line-height:1}
+  .lean:hover,.tilt:hover,.gyro:hover{border-color:var(--amber);color:var(--ink)}
+  .lean.on,.tilt.on,.gyro.on{background:var(--amber);border-color:var(--amber);color:#2a1604}
+  .arms{display:flex;gap:4px;margin:-4px 0 8px}
   input[type=range]{width:100%;-webkit-appearance:none;height:5px;background:var(--line);border-radius:5px;outline:none}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
   input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--bg)}
@@ -112,30 +116,65 @@
 
   <div class="controls">
     <div class="ctitle">▸ variables you control</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:-10px">♪ pitch follows the note · 🎤 loudness follows the volume</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-10px">♪ pitch · 🎤 loudness · ↔ lean · ↕ tilt · ↻ gyro</div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="note" data-pitch="grid" title="pitch drives this">♪</button><button class="mic on" data-mic="grid" title="loudness drives this">🎤</button><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
+      <label><span class="lhs"><span class="varname">gridSize</span> — chunkiness</span><b id="vGrid">14</b></label>
+      <div class="arms">
+        <button class="note" data-pitch="grid" title="pitch drives this">♪</button>
+        <button class="mic on" data-mic="grid" title="loudness drives this">🎤</button>
+        <button class="lean" data-lean="grid" title="lean drives this">↔</button>
+        <button class="tilt" data-tilt="grid" title="tilt drives this">↕</button>
+        <button class="gyro" data-gyro="grid" title="gyro drives this">↻</button>
+      </div>
       <input type="range" id="grid" min="4" max="48" value="14">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="note" data-pitch="thresh" title="pitch drives this">♪</button><button class="mic" data-mic="thresh" title="loudness drives this">🎤</button><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
+      <label><span class="lhs"><span class="varname">threshold</span> — light cutoff</span><b id="vThresh">128</b></label>
+      <div class="arms">
+        <button class="note" data-pitch="thresh" title="pitch drives this">♪</button>
+        <button class="mic" data-mic="thresh" title="loudness drives this">🎤</button>
+        <button class="lean on" data-lean="thresh" title="lean drives this">↔</button>
+        <button class="tilt" data-tilt="thresh" title="tilt drives this">↕</button>
+        <button class="gyro" data-gyro="thresh" title="gyro drives this">↻</button>
+      </div>
       <input type="range" id="thresh" min="0" max="255" value="128">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="note on" data-pitch="hue" title="pitch drives this">♪</button><button class="mic" data-mic="hue" title="loudness drives this">🎤</button><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
+      <label><span class="lhs"><span class="varname">hueShift</span> — color twist</span><b id="vHue">0</b></label>
+      <div class="arms">
+        <button class="note on" data-pitch="hue" title="pitch drives this">♪</button>
+        <button class="mic" data-mic="hue" title="loudness drives this">🎤</button>
+        <button class="lean" data-lean="hue" title="lean drives this">↔</button>
+        <button class="tilt" data-tilt="hue" title="tilt drives this">↕</button>
+        <button class="gyro" data-gyro="hue" title="gyro drives this">↻</button>
+      </div>
       <input type="range" id="hue" min="0" max="360" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="note" data-pitch="wob" title="pitch drives this">♪</button><button class="mic" data-mic="wob" title="loudness drives this">🎤</button><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
+      <label><span class="lhs"><span class="varname">wobble</span> — motion warp</span><b id="vWob">0</b></label>
+      <div class="arms">
+        <button class="note" data-pitch="wob" title="pitch drives this">♪</button>
+        <button class="mic" data-mic="wob" title="loudness drives this">🎤</button>
+        <button class="lean" data-lean="wob" title="lean drives this">↔</button>
+        <button class="tilt" data-tilt="wob" title="tilt drives this">↕</button>
+        <button class="gyro" data-gyro="wob" title="gyro drives this">↻</button>
+      </div>
       <input type="range" id="wob" min="0" max="40" value="0">
     </div>
 
     <div class="ctrl">
-      <label><span class="lhs"><button class="note" data-pitch="ang" title="pitch drives this">♪</button><button class="mic" data-mic="ang" title="loudness drives this">🎤</button><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
+      <label><span class="lhs"><span class="varname">wobAngle</span> — warp direction</span><b id="vAng">0°</b></label>
+      <div class="arms">
+        <button class="note" data-pitch="ang" title="pitch drives this">♪</button>
+        <button class="mic" data-mic="ang" title="loudness drives this">🎤</button>
+        <button class="lean" data-lean="ang" title="lean drives this">↔</button>
+        <button class="tilt on" data-tilt="ang" title="tilt drives this">↕</button>
+        <button class="gyro on" data-gyro="ang" title="gyro drives this">↻</button>
+      </div>
       <input type="range" id="ang" min="0" max="360" value="0">
     </div>
 
@@ -200,6 +239,9 @@ const modeNames = ["ascii dots","color blocks","edge glow","mirror kaleido"];
 let mic, micOn = false, micLevel = 0;        // micLevel: smoothed 0..1
 const micArmed = { grid:true, thresh:false, hue:false, wob:false, ang:false };
 const pitchArmed = { grid:false, thresh:false, hue:true, wob:false, ang:false };
+const leanArmed = { grid:false, thresh:true, hue:false, wob:false, ang:false };
+const tiltArmed = { grid:false, thresh:false, hue:false, wob:false, ang:true };
+const gyroArmed = { grid:false, thresh:false, hue:false, wob:false, ang:true };
 let tiltZero = null;
 const bus = new BroadcastChannel("pixel-mirror");
 let liveAdd = {grid:0, thresh:0, hue:0, wob:0, ang:0};
@@ -207,7 +249,9 @@ let liveAdd = {grid:0, thresh:0, hue:0, wob:0, ang:0};
 function snapshot(){
   return {type:"state", grid:base.grid, thresh:base.thresh, hue:base.hue, wob:base.wob, ang:base.ang,
     mir: mirror ? 1 : 0, inv: invert ? 1 : 0, mode,
-    micArm: Object.assign({}, micArmed), pitchArm: Object.assign({}, pitchArmed), tiltZero};
+    micArm: Object.assign({}, micArmed), pitchArm: Object.assign({}, pitchArmed),
+    leanArm: Object.assign({}, leanArmed), tiltArm: Object.assign({}, tiltArmed),
+    gyroArm: Object.assign({}, gyroArmed), tiltZero};
 }
 function publish(){ if(!m5Applying) bus.postMessage(snapshot()); }
 
@@ -326,11 +370,17 @@ $("zeroTilt").onclick = () => {
 function syncArmButtons(){
   document.querySelectorAll(".mic").forEach(b => b.classList.toggle("on", !!micArmed[b.dataset.mic]));
   document.querySelectorAll(".note").forEach(b => b.classList.toggle("on", !!pitchArmed[b.dataset.pitch]));
+  document.querySelectorAll(".lean").forEach(b => b.classList.toggle("on", !!leanArmed[b.dataset.lean]));
+  document.querySelectorAll(".tilt").forEach(b => b.classList.toggle("on", !!tiltArmed[b.dataset.tilt]));
+  document.querySelectorAll(".gyro").forEach(b => b.classList.toggle("on", !!gyroArmed[b.dataset.gyro]));
+}
+function anyArm(key){
+  return micArmed[key] || pitchArmed[key] || leanArmed[key] || tiltArmed[key] || gyroArmed[key];
 }
 function toggleArm(btn, store, key, name){
   store[key] = !store[key];
   btn.classList.toggle("on", store[key]);
-  if(!micArmed[key] && !pitchArmed[key]) showLive(key, base[key]);
+  if(!anyArm(key)) showLive(key, base[key]);
   publish();
   flash((store[key] ? name + " → " : name + " off ") + key);
 }
@@ -339,6 +389,15 @@ document.querySelectorAll(".mic").forEach(btn=>{
 });
 document.querySelectorAll(".note").forEach(btn=>{
   btn.onclick = () => toggleArm(btn, pitchArmed, btn.dataset.pitch, "pitch");
+});
+document.querySelectorAll(".lean").forEach(btn=>{
+  btn.onclick = () => toggleArm(btn, leanArmed, btn.dataset.lean, "lean");
+});
+document.querySelectorAll(".tilt").forEach(btn=>{
+  btn.onclick = () => toggleArm(btn, tiltArmed, btn.dataset.tilt, "tilt");
+});
+document.querySelectorAll(".gyro").forEach(btn=>{
+  btn.onclick = () => toggleArm(btn, gyroArmed, btn.dataset.gyro, "gyro");
 });
 
 // each frame: for every armed variable, value = sliderBase + mic * (range above base)
@@ -391,6 +450,9 @@ window.addEventListener("keydown", e => {
       setToggle("mir",true); setToggle("inv",false); setMode(0);
       Object.assign(micArmed, {grid:true, thresh:false, hue:false, wob:false, ang:false});
       Object.assign(pitchArmed, {grid:false, thresh:false, hue:true, wob:false, ang:false});
+      Object.assign(leanArmed, {grid:false, thresh:true, hue:false, wob:false, ang:false});
+      Object.assign(tiltArmed, {grid:false, thresh:false, hue:false, wob:false, ang:true});
+      Object.assign(gyroArmed, {grid:false, thresh:false, hue:false, wob:false, ang:true});
       syncArmButtons();
       flash("reset"); break;
     case " ":
