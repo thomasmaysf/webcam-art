@@ -175,7 +175,7 @@
         <button class="note" data-pitch="ang" title="pitch drives this">♪</button>
         <button class="mic" data-mic="ang" title="loudness drives this">🎤</button>
         <button class="lean" data-lean="ang" title="lean drives this">↔</button>
-        <button class="tilt on" data-tilt="ang" title="tilt drives this">↕</button>
+        <button class="tilt" data-tilt="ang" title="tilt drives this">↕</button>
         <button class="gyro on" data-gyro="ang" title="gyro drives this">↻</button>
       </div>
       <input type="range" id="ang" min="-180" max="180" value="0">
@@ -243,7 +243,7 @@ let mic, micOn = false, micLevel = 0;        // micLevel: smoothed 0..1
 const micArmed = { grid:true, thresh:false, hue:false, wob:false, ang:false };
 const pitchArmed = { grid:false, thresh:false, hue:true, wob:false, ang:false };
 const leanArmed = { grid:false, thresh:true, hue:false, wob:false, ang:false };
-const tiltArmed = { grid:false, thresh:false, hue:false, wob:false, ang:true };
+const tiltArmed = { grid:false, thresh:false, hue:false, wob:false, ang:false };
 const gyroArmed = { grid:false, thresh:false, hue:false, wob:false, ang:true };
 let tiltZero = null;
 const bus = new BroadcastChannel("pixel-mirror");
@@ -455,7 +455,7 @@ window.addEventListener("keydown", e => {
       Object.assign(micArmed, {grid:true, thresh:false, hue:false, wob:false, ang:false});
       Object.assign(pitchArmed, {grid:false, thresh:false, hue:true, wob:false, ang:false});
       Object.assign(leanArmed, {grid:false, thresh:true, hue:false, wob:false, ang:false});
-      Object.assign(tiltArmed, {grid:false, thresh:false, hue:false, wob:false, ang:true});
+      Object.assign(tiltArmed, {grid:false, thresh:false, hue:false, wob:false, ang:false});
       Object.assign(gyroArmed, {grid:false, thresh:false, hue:false, wob:false, ang:true});
       syncArmButtons();
       flash("reset"); break;
